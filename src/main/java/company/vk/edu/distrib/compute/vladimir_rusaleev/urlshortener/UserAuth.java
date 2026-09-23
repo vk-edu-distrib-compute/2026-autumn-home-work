@@ -9,6 +9,8 @@ import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
 
 final class UserAuth {
+    private static final String POST_METHOD = "POST";
+
     private final Dao<String> users;
 
     UserAuth(Dao<String> users) {
@@ -16,7 +18,7 @@ final class UserAuth {
     }
 
     void createUser(HttpExchange exchange) throws IOException {
-        if (!"POST".equals(exchange.getRequestMethod())) {
+        if (!POST_METHOD.equals(exchange.getRequestMethod())) {
             UrlLinks.respond(exchange, 405, null);
             return;
         }
