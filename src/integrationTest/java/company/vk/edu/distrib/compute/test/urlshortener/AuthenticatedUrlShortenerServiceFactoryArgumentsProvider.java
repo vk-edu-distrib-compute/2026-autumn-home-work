@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
-import company.vk.edu.distrib.compute.urlshortener.DummyUrlShortenerServiceFactory;
+import company.vk.edu.distrib.compute.vladimir_rusaleev.urlshortener.UrlShortenerServiceFactory;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
