@@ -1,8 +1,6 @@
 # 2026-autumn-home-work 
 
-[![Build Status](https://github.com/vk-edu-distrib-compute/2026-autumn-home-work/actions/workflows/gradle-build.yaml/badge.svg)](https://github.com/vk-edu-distrib-compute/2026-autumn-home-work/actions/workflows/gradle-build.yaml/badge.svg)
-[![Code Style Check](https://github.com/vk-edu-distrib-compute/2026-autumn-home-work/actions/workflows/gradle-code-style.yaml/badge.svg)](https://github.com/vk-edu-distrib-compute/2026-autumn-home-work/actions/workflows/gradle-code-style.yaml)
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/fdb601d406384215a5a37372cc3cf06a)](https://app.codacy.com/gh/vk-edu-distrib-compute/2026-autumn-home-work/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+[![Checks](https://github.com/vk-edu-distrib-compute/2026-autumn-home-work/actions/workflows/gradle-checks.yaml/badge.svg)](https://github.com/vk-edu-distrib-compute/2026-autumn-home-work/actions/workflows/gradle-checks.yaml) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/413dd10e84d04e18b5d86094472011d9)](https://app.codacy.com/gh/vk-edu-distrib-compute/2026-autumn-home-work/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 
 # Правила репозитория
 ## Ограничения и запреты
