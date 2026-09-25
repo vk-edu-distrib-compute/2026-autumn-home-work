@@ -95,6 +95,11 @@ public final class FileStringDao implements Dao<String> {
         }
     }
 
+    @Override
+    public boolean exists(String key) throws IllegalArgumentException {
+        return false;
+    }
+
     public boolean isAvailable() {
         lock.lock();
         try {

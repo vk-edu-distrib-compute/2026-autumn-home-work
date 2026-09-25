@@ -10,4 +10,6 @@ public interface Dao<T> extends Closeable {
     void upsert(String key, T value) throws IllegalArgumentException, IOException;
 
     void delete(String key) throws IllegalArgumentException, IOException;
+
+    boolean exists(String key) throws IllegalArgumentException;
 }
