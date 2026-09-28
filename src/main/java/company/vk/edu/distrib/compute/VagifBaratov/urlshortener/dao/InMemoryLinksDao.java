@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.vagifbaratov.urlshortener;
+package company.vk.edu.distrib.compute.vagifbaratov.urlshortener.dao;
 
 import company.vk.edu.distrib.compute.Dao;
 
@@ -7,7 +7,7 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-public class InMemoryDao implements Dao<String> {
+public class InMemoryLinksDao implements Dao<String> {
     private final ConcurrentMap<String, String> storage = new ConcurrentHashMap<>();
 
     @Override
@@ -34,7 +34,7 @@ public class InMemoryDao implements Dao<String> {
 
     @Override
     public void close() throws IOException {
-        storage.clear();
+        //nothing to do.
     }
 
     private static void validateKey(String key) {
