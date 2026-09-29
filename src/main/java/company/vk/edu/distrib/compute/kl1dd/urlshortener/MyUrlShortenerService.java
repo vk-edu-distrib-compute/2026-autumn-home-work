@@ -9,20 +9,18 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
-import java.util.Base64;
-import java.util.List;
 import java.util.NoSuchElementException;
 
 public class MyUrlShortenerService implements UrlShortenerService {
     private final SecureRandom random = new SecureRandom();
     private final HttpServer httpServer;
     private final MyDao linksDao;
-    private final MyDao authDao;
+    private final AuthService authService;
 
     public MyUrlShortenerService(HttpServer httpServer) {
         this.httpServer = httpServer;
         this.linksDao = new MyDao();
-        this.authDao = new MyDao();
+        this.authService = new AuthService();
 
         httpServer.createContext("/v0/status", this::handleStatus);
         httpServer.createContext("/v0/links", this::handleLinks);
@@ -43,42 +41,10 @@ public class MyUrlShortenerService implements UrlShortenerService {
         String username = reqSplit[0];
         String password = reqSplit[1];
 
-        authDao.upsert(username, password);
+        authService.createUser(username, password);
 
         exchange.sendResponseHeaders(200, -1);
         exchange.close();
-    }
-
-    private boolean isAuthed(HttpExchange exchange) throws IOException {
-        List<String> authHeaders = exchange.getRequestHeaders().get("Authorization");
-        if (authHeaders == null || authHeaders.isEmpty()) {
-            return false;
-        }
-        String auth = authHeaders.getFirst();
-        if (auth == null || !auth.startsWith("Basic ")) {
-            return false;
-        }
-
-        String nonBasicStr;
-        try {
-            String basicStr = auth.substring("Basic ".length());
-            nonBasicStr = new String(Base64.getDecoder().decode(basicStr), StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
-        String[] splitStr = nonBasicStr.split(":", 2);
-        if (splitStr.length != 2) {
-            return false;
-        }
-
-        String username = splitStr[0];
-        String password = splitStr[1];
-        try {
-            String realPassword = authDao.get(username);
-            return realPassword.equals(password);
-        } catch (NoSuchElementException e) {
-            return false;
-        }
     }
 
     private String generateRandomID(int length) {
@@ -103,7 +69,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
     }
 
     private void handleLinks(HttpExchange exchange) throws IOException {
-        if (!isAuthed(exchange)) {
+        if (!authService.isAuthed(exchange)) {
             exchange.sendResponseHeaders(401, -1);
             exchange.close();
             return;
