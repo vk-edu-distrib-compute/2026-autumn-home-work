@@ -3,15 +3,16 @@ package company.vk.edu.distrib.compute.kl1dd.urlshortener;
 import company.vk.edu.distrib.compute.Dao;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class MyDao implements Dao<String> {
-    private final ConcurrentHashMap<String, String> myHashMap;
+    private final Map<String, String> myHashMap;
+
     public MyDao() {
         this.myHashMap = new ConcurrentHashMap<>();
     }
-
 
     @Override
     public String get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
@@ -34,5 +35,7 @@ public class MyDao implements Dao<String> {
     }
 
     @Override
-    public void close() throws IOException {}
+    public void close() throws IOException {
+        // later
+    }
 }
