@@ -9,20 +9,76 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.util.Base64;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 public class MyUrlShortenerService implements UrlShortenerService {
     private final SecureRandom random = new SecureRandom();
     private final HttpServer httpServer;
-    private final MyDao myDao;
+    private final MyDao linksDao;
+    private final MyDao authDao;
 
     public MyUrlShortenerService(HttpServer httpServer) {
         this.httpServer = httpServer;
-        this.myDao = new MyDao();
+        this.linksDao = new MyDao();
+        this.authDao = new MyDao();
 
         httpServer.createContext("/v0/status", this::handleStatus);
         httpServer.createContext("/v0/links", this::handleLinks);
         httpServer.createContext("/", this::handleRedirect);
+        httpServer.createContext("/internal/users", this::handleUsers);
+    }
+
+    private void handleUsers(HttpExchange exchange) throws IOException {
+        String method = exchange.getRequestMethod();
+        if (!("POST".equals(method))) {
+            exchange.sendResponseHeaders(405, -1);
+            exchange.close();
+            return;
+        }
+
+        String reqBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String[] reqSplit = reqBody.split(":", 2);
+        String username = reqSplit[0];
+        String password = reqSplit[1];
+
+        authDao.upsert(username, password);
+
+        exchange.sendResponseHeaders(200, -1);
+        exchange.close();
+    }
+
+    private boolean isAuthed(HttpExchange exchange) throws IOException {
+        List<String> authHeaders = exchange.getRequestHeaders().get("Authorization");
+        if (authHeaders == null || authHeaders.isEmpty()) {
+            return false;
+        }
+        String auth = authHeaders.getFirst();
+        if (auth == null || !auth.startsWith("Basic ")) {
+            return false;
+        }
+
+        String nonBasicStr;
+        try {
+            String basicStr = auth.substring("Basic ".length());
+            nonBasicStr = new String(Base64.getDecoder().decode(basicStr), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        String[] splitStr = nonBasicStr.split(":", 2);
+        if (splitStr.length != 2) {
+            return false;
+        }
+
+        String username = splitStr[0];
+        String password = splitStr[1];
+        try {
+            String realPassword = authDao.get(username);
+            return realPassword.equals(password);
+        } catch (NoSuchElementException e) {
+            return false;
+        }
     }
 
     private String generateRandomID(int length) {
@@ -47,8 +103,13 @@ public class MyUrlShortenerService implements UrlShortenerService {
     }
 
     private void handleLinks(HttpExchange exchange) throws IOException {
-        String method = exchange.getRequestMethod();
+        if (!isAuthed(exchange)) {
+            exchange.sendResponseHeaders(401, -1);
+            exchange.close();
+            return;
+        }
 
+        String method = exchange.getRequestMethod();
         switch (method) {
             case "POST" -> {
                 handlePost(exchange);
@@ -78,7 +139,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
         }
 
         String id = generateRandomID(10);
-        myDao.upsert(id, linkBefore);
+        linksDao.upsert(id, linkBefore);
 
         exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
 
@@ -103,7 +164,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
         try {
             exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
 
-            String linkByID = myDao.get(id);
+            String linkByID = linksDao.get(id);
             byte[] responseBytes = linkByID.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, responseBytes.length);
             exchange.getResponseBody().write(responseBytes);
@@ -124,7 +185,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
         }
 
         try {
-            myDao.get(id);
+            linksDao.get(id);
 
             String newLink = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             if (!isValidURL(newLink)) {
@@ -133,7 +194,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
                 return;
             }
 
-            myDao.upsert(id, newLink);
+            linksDao.upsert(id, newLink);
 
             exchange.sendResponseHeaders(200, -1);
             exchange.close();
@@ -153,7 +214,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
             return;
         }
 
-        myDao.delete(id);
+        linksDao.delete(id);
         exchange.sendResponseHeaders(202, -1);
         exchange.close();
     }
@@ -175,7 +236,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
         }
 
         try {
-            String linkByID = myDao.get(id);
+            String linkByID = linksDao.get(id);
 
             exchange.getResponseHeaders().set("Location", linkByID);
             exchange.sendResponseHeaders(301, -1);
