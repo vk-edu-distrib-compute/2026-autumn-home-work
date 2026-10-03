@@ -1,19 +1,18 @@
-package company.vk.edu.distrib.compute.randomrandoms.urlshortener;
+package company.vk.edu.distrib.compute.randomrandoms.kv;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
-public class Dao<T> implements company.vk.edu.distrib.compute.Dao<T> {
+public class RamDao<T> implements company.vk.edu.distrib.compute.Dao<T> {
     private final Map<String, T> map;
 
-    public Dao() {
+    public RamDao() {
         map = new HashMap<>();
     }
 
     @Override
-    public T get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
+    public T get(String key) throws NoSuchElementException, IllegalArgumentException {
         if (map.containsKey(key)) {
             return map.get(key);
         } else {
@@ -22,17 +21,17 @@ public class Dao<T> implements company.vk.edu.distrib.compute.Dao<T> {
     }
 
     @Override
-    public void upsert(String key, T value) throws IllegalArgumentException, IOException {
+    public void upsert(String key, T value) throws IllegalArgumentException {
         map.put(key, value);
     }
 
     @Override
-    public void delete(String key) throws IllegalArgumentException, IOException {
+    public void delete(String key) throws IllegalArgumentException {
         map.remove(key);
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         // skibidi dop dop yes yes
     }
 }
