@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 class KVServiceSingleNodeTest {
 
     static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
-    static final String ENTITY_PATH = "/v0/entity/";
+    static final String ENTITY_PATH = "/v0/entity?id=";
 
     @Parameter
     AbstractHttpServiceFactory<KVService> kvServiceFactory;

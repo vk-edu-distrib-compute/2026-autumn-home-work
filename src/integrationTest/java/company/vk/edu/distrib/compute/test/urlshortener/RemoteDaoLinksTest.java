@@ -15,11 +15,13 @@ import java.util.stream.Stream;
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.kv.KVService;
+import company.vk.edu.distrib.compute.kv.KVServiceTest;
 import company.vk.edu.distrib.compute.kv.RemoteDaoFactory;
 import company.vk.edu.distrib.compute.kv.RemoteDaoFactoryTest;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerTest;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.Parameter;
@@ -66,18 +68,40 @@ class RemoteDaoLinksTest {
     @Parameter(1)
     RemoteDaoFactory<String> remoteDaoFactory;
 
+    @Parameter(2)
+    AbstractHttpServiceFactory<? extends KVService> kvServiceFactory;
+
     int port;
 
     UrlShortenerService service;
 
     Dao<String> remoteDao;
 
+    KVService kvService;
+
     @BeforeEach
     void setup() throws IOException {
+        int kvPort = randomPort();
+        KVService kvService = kvServiceFactory.create(kvPort);
+        kvService.start();
+        this.kvService = kvService;
         this.port = randomPort();
         this.service = serviceFactory.create(port);
-        this.remoteDao = remoteDaoFactory.create(randomPort());
+        this.remoteDao = remoteDaoFactory.create(kvPort);
         service.setLinksDao(remoteDao);
+    }
+
+    @AfterEach
+    void teardown() throws IOException {
+        try {
+            if (remoteDao != null) {
+                remoteDao.close();
+            }
+        } finally {
+            if (kvService != null) {
+                kvService.stop();
+            }
+        }
     }
 
     @AfterAll
@@ -239,11 +263,14 @@ class RemoteDaoLinksTest {
     static Stream<Arguments> serviceDaoPairs() {
         final var urlShortenerServiceFactories = groupByPackageName(findAnnotatedFactories(UrlShortenerTest.class));
         final var remoteDaoFactories = groupByPackageName(findAnnotatedFactories(RemoteDaoFactoryTest.class));
+        final var kvServiceFactories = groupByPackageName(findAnnotatedFactories(KVServiceTest.class));
         return urlShortenerServiceFactories.entrySet().stream()
             .filter(it -> remoteDaoFactories.containsKey(it.getKey()))
+            .filter(it -> kvServiceFactories.containsKey(it.getKey()))
             .map(it -> Arguments.of(
                 ReflectionUtils.newInstance(it.getValue()),
-                ReflectionUtils.newInstance(Objects.requireNonNull(remoteDaoFactories.get(it.getKey())))));
+                ReflectionUtils.newInstance(Objects.requireNonNull(remoteDaoFactories.get(it.getKey()))),
+                ReflectionUtils.newInstance(Objects.requireNonNull(kvServiceFactories.get(it.getKey())))));
     }
 
     static Map<String, Class<?>> groupByPackageName(Collection<Class<?>> classes) {
