@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.sh4rrkyyyy.urlshortener;
+package company.vk.edu.distrib.compute.sh4rrkyyyy.common;
 
 import com.sun.net.httpserver.HttpExchange;
 
@@ -21,4 +21,9 @@ public final class HttpUtils {
         exchange.close();
     }
 
+    public static void sendBytes(HttpExchange exchange, int code, byte[] body) throws IOException {
+        exchange.sendResponseHeaders(code, body.length);
+        exchange.getResponseBody().write(body);
+        exchange.close();
+    }
 }

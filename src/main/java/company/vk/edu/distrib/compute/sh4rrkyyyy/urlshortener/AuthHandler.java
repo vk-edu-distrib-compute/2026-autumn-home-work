@@ -2,15 +2,17 @@ package company.vk.edu.distrib.compute.sh4rrkyyyy.urlshortener;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.HttpUtils;
 
 import java.io.IOException;
 
 public class AuthHandler implements HttpHandler {
     private final HttpHandler handler;
-    private final DaoString usersDao;
+    private final Dao<String> usersDao;
     private static final String AUTH_HEADER = "Authorization";
 
-    public AuthHandler(HttpHandler handler, DaoString usersDao) {
+    public AuthHandler(HttpHandler handler, Dao<String> usersDao) {
         this.handler = handler;
         this.usersDao = usersDao;
     }

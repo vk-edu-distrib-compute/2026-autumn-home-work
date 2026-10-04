@@ -2,6 +2,11 @@ package company.vk.edu.distrib.compute.sh4rrkyyyy.urlshortener;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.ErrorHandler;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.HttpUtils;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.PersistentDao;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.Serializers;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 
 import java.io.IOException;
@@ -13,8 +18,8 @@ import java.util.regex.Pattern;
 
 public class Sh4rkyUrlShortenerService implements UrlShortenerService {
     private final HttpServer server;
-    private final DaoString linksDao = new DaoString("links");
-    private final DaoString usersDao = new DaoString("users");
+    private Dao<String> linksDao = new PersistentDao<>("links", Serializers.STRING);
+    private final Dao<String> usersDao = new PersistentDao<>("users", Serializers.STRING);
     private final int port;
 
     private static final String GET = "GET";
@@ -45,6 +50,11 @@ public class Sh4rkyUrlShortenerService implements UrlShortenerService {
     @Override
     public void stop() {
         server.stop(1);
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        this.linksDao = dao;
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
