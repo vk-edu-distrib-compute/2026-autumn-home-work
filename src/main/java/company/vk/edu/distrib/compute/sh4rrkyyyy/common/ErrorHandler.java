@@ -1,7 +1,8 @@
-package company.vk.edu.distrib.compute.sh4rrkyyyy.urlshortener;
+package company.vk.edu.distrib.compute.sh4rrkyyyy.common;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.urlshortener.HttpStatus;
 
 import java.io.IOException;
 import java.util.NoSuchElementException;
