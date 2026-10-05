@@ -43,6 +43,7 @@ public class KVServiceImpl implements KVService {
     private static final int METHOD_NOT_ALLOWED_CODE = 405;
     private static final int INTERNAL_ERROR_CODE = 500;
 
+    private static final int SINGLE_THREAD = 1;
     private static final int NO_BODY = -1;
     private static final int NOT_SENT = -1;
 
@@ -77,7 +78,7 @@ public class KVServiceImpl implements KVService {
         }
         http.createContext(STATUS_PATH, guarded(exchange -> reply(exchange, OK_CODE)));
         http.createContext(ENTITY_PATH, guarded(this::onEntity));
-        if (threads > 1) {
+        if (threads > SINGLE_THREAD) {
             workers = Executors.newFixedThreadPool(threads);
         }
         http.setExecutor(workers);
