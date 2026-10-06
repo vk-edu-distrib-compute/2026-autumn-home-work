@@ -12,13 +12,10 @@ import java.util.NoSuchElementException;
 
 public class RemoteDao implements Dao<String> {
     private final HttpClient client;
-    private final Kvs kvs;
     private final int port;
 
     public RemoteDao(int port) throws IOException {
         client = HttpClient.newHttpClient();
-        kvs = new Kvs(port);
-        kvs.start();
         this.port = port;
     }
 
@@ -91,10 +88,9 @@ public class RemoteDao implements Dao<String> {
     @Override
     public void close() throws IOException {
         client.close();
-        kvs.stop();
     }
 
     private String path(String key) {
-        return String.format("http://localhost:%d%s/%s", port, Kvs.ENTITY, key);
+        return String.format("http://localhost:%d%s?id=%s", port, Kvs.ENTITY, key);
     }
 }

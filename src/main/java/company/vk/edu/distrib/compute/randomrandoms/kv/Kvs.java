@@ -64,6 +64,7 @@ public class Kvs implements KVService {
 
     public static final String ENTITY = "/v0/entity";
     public static final String STATUS = "/v0/status";
+    public static final String QUERY = "id=";
     public static final int INCORRECT_KEY_CODE = 400;
     public static final int NOT_FOUND_CODE = 404;
     public static final int FOUND_CODE = 200;
@@ -81,11 +82,11 @@ public class Kvs implements KVService {
     }
 
     private Optional<String> parseUri(URI uri) {
-        var path = uri.getPath();
-        if (!path.startsWith(ENTITY)) {
+        var query = uri.getQuery();
+        if (!query.startsWith(QUERY)) {
             return Optional.empty();
         }
-        return Optional.of(path.substring(ENTITY.length() + 1));
+        return Optional.of(query.substring(QUERY.length()));
     }
 
     @Override
