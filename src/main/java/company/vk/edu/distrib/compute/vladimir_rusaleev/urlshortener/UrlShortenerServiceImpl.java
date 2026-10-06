@@ -52,7 +52,7 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
     public void stop() {
         stopped = true;
         if (server != null) {
-            server.stop(0);
+            server.stop(1);
         }
         try {
             links.close();
