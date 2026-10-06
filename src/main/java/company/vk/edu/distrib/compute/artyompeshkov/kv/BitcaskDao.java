@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import company.vk.edu.distrib.compute.Dao;
 
@@ -15,6 +17,7 @@ public class BitcaskDao implements Dao<byte[]> {
 
     private final RandomAccessFile file;
     private final Map<String, Long> index = new ConcurrentHashMap<>();
+    private final Lock lock = new ReentrantLock();
 
     public BitcaskDao(Path dir) throws IOException {
         Files.createDirectories(dir);
@@ -23,37 +26,57 @@ public class BitcaskDao implements Dao<byte[]> {
     }
 
     @Override
-    public synchronized byte[] get(String key) throws IOException {
+    public byte[] get(String key) throws IOException {
         checkKey(key);
-        Long position = index.get(key);
-        if (position == null) {
-            throw new NoSuchElementException("Key not found: " + key);
-        }
-        file.seek(position);
-        byte[] value = new byte[file.readInt()];
-        file.readFully(value);
-        return value;
-    }
-
-    @Override
-    public synchronized void upsert(String key, byte[] value) throws IOException {
-        checkKey(key);
-        long position = append(key, value.length);
-        file.write(value);
-        index.put(key, position);
-    }
-
-    @Override
-    public synchronized void delete(String key) throws IOException {
-        checkKey(key);
-        if (index.remove(key) != null) {
-            append(key, DELETED);
+        lock.lock();
+        try {
+            Long position = index.get(key);
+            if (position == null) {
+                throw new NoSuchElementException("Key not found: " + key);
+            }
+            file.seek(position);
+            byte[] value = new byte[file.readInt()];
+            file.readFully(value);
+            return value;
+        } finally {
+            lock.unlock();
         }
     }
 
     @Override
-    public synchronized void close() throws IOException {
-        file.close();
+    public void upsert(String key, byte[] value) throws IOException {
+        checkKey(key);
+        lock.lock();
+        try {
+            long position = append(key, value.length);
+            file.write(value);
+            index.put(key, position);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    public void delete(String key) throws IOException {
+        checkKey(key);
+        lock.lock();
+        try {
+            if (index.remove(key) != null) {
+                append(key, DELETED);
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    public void close() throws IOException {
+        lock.lock();
+        try {
+            file.close();
+        } finally {
+            lock.unlock();
+        }
     }
 
     boolean isAvailable() {
