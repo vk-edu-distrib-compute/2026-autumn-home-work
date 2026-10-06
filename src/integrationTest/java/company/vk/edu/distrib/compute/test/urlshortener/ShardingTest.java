@@ -3,9 +3,7 @@ package company.vk.edu.distrib.compute.test.urlshortener;
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.kv.RemoteDaoFactory;
-import company.vk.edu.distrib.compute.kv.RemoteDaoFactoryTest;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
-import company.vk.edu.distrib.compute.urlshortener.UrlShortenerTest;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -13,28 +11,25 @@ import org.junit.jupiter.params.Parameter;
 import org.junit.jupiter.params.ParameterizedClass;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.platform.commons.util.ReflectionUtils;
 import org.junitpioneer.jupiter.RetryingTest;
 
 import java.io.IOException;
 import java.net.BindException;
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
-import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Stream;
 
-import static company.vk.edu.distrib.compute.test.AbstractArgumentsProvider.findAnnotatedFactories;
 import static company.vk.edu.distrib.compute.test.TestUtils.*;
 import static company.vk.edu.distrib.compute.test.urlshortener.LinksApiTest.createLink;
 import static company.vk.edu.distrib.compute.test.urlshortener.LinksApiTest.getLinks;
+import static company.vk.edu.distrib.compute.test.urlshortener.RemoteDaoLinksTest.serviceDaoPairs;
 import static org.junit.jupiter.api.Assertions.*;
 
 @ParameterizedClass(allowZeroInvocations = true)
-@MethodSource("serviceDaoPairs")
-@EnabledIfEnvironmentVariable(named = "CURRENT_DATE", matches = "2026-(10-05|10-07|10-08|10-09|10-10|10-11|10-12|10-13|10-14)")
+@MethodSource("createServiceDaoPairs")
+@EnabledIfEnvironmentVariable(named = "CURRENT_DATE", matches = "2026-(10-06|10-07|10-08|10-09|10-10|10-11|10-12|10-13|10-14)")
 public class ShardingTest {
     private static final int CLUSTER_SIZE = 2;
     public static final String TEST_LINK_ID = "10db3750xY";
@@ -44,7 +39,6 @@ public class ShardingTest {
     private static final String ENTITY_PATH = "/v0/entity/";
 
     private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
-    public static final int PACKAGE_PREFIX_LEN = "company.vk.edu.distrib.compute.".length();
 
     @Parameter(0)
     AbstractHttpServiceFactory<? extends UrlShortenerService> serviceFactory;
@@ -173,36 +167,7 @@ public class ShardingTest {
         return idNodes;
     }
 
-    static String randomKey() {
-        return Long.toHexString(ThreadLocalRandom.current().nextLong());
-    }
-
-    static byte[] randomValue() {
-        final byte[] result = new byte[1024];
-        ThreadLocalRandom.current().nextBytes(result);
-        return result;
-    }
-
-    static Stream<Arguments> serviceDaoPairs() {
-        final var urlShortenerServiceFactories = groupByPackageName(findAnnotatedFactories(UrlShortenerTest.class));
-        final var remoteDaoFactories = groupByPackageName(findAnnotatedFactories(RemoteDaoFactoryTest.class));
-        return urlShortenerServiceFactories.entrySet().stream()
-                .filter(it -> remoteDaoFactories.containsKey(it.getKey()))
-                .map(it -> Arguments.of(
-                        ReflectionUtils.newInstance(it.getValue()),
-                        ReflectionUtils.newInstance(Objects.requireNonNull(remoteDaoFactories.get(it.getKey())))));
-    }
-
-    static Map<String, Class<?>> groupByPackageName(Collection<Class<?>> classes) {
-        return classes.stream().collect(Collectors.toMap(
-                clazz -> extractUsername(clazz.getPackageName()),
-                Function.identity(),
-                (x, _) -> x
-        ));
-    }
-
-    static String extractUsername(String packageName) {
-        var withoutPrefix = packageName.substring(PACKAGE_PREFIX_LEN);
-        return withoutPrefix.substring(0, withoutPrefix.indexOf("."));
+    static Stream<Arguments> createServiceDaoPairs() {
+        return serviceDaoPairs();
     }
 }
