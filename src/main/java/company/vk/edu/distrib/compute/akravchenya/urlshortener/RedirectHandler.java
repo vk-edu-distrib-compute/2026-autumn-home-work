@@ -12,9 +12,18 @@ final class RedirectHandler implements RequestHandler.ThrowingHandler {
 
     private static final String GET = "GET";
 
-    private final Dao<String> links;
+    private Dao<String> links;
 
     RedirectHandler(Dao<String> links) {
+        this.links = links;
+    }
+
+    /**
+     * Заменить используемое хранилище ссылок.
+     *
+     * @param links новое хранилище
+     */
+    void setDao(Dao<String> links) {
         this.links = links;
     }
 

@@ -16,7 +16,7 @@ final class LinksHandler implements RequestHandler.ThrowingHandler {
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final int ID_LENGTH = 10;
 
-    private final Dao<String> links;
+    private Dao<String> links;
     private final Authentication authentication;
     private final int port;
 
@@ -24,6 +24,15 @@ final class LinksHandler implements RequestHandler.ThrowingHandler {
         this.links = links;
         this.authentication = authentication;
         this.port = port;
+    }
+
+    /**
+     * Заменить используемое хранилище ссылок.
+     *
+     * @param links новое хранилище
+     */
+    void setDao(Dao<String> links) {
+        this.links = links;
     }
 
     @Override
