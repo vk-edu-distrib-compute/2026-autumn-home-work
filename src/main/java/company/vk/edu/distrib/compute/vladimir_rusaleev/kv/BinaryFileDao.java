@@ -21,27 +21,35 @@ final class BinaryFileDao implements Dao<byte[]> {
     }
 
     @Override
-    public synchronized byte[] get(String key) throws IOException {
-        try {
-            return Files.readAllBytes(pathFor(key));
-        } catch (NoSuchFileException exception) {
-            throw new NoSuchElementException(key, exception);
+    public byte[] get(String key) throws IOException {
+        Path target = pathFor(key);
+        synchronized (this) {
+            try {
+                return Files.readAllBytes(target);
+            } catch (NoSuchFileException exception) {
+                throw new NoSuchElementException(key, exception);
+            }
         }
     }
 
     @Override
-    public synchronized void upsert(String key, byte[] value) throws IOException {
+    public void upsert(String key, byte[] value) throws IOException {
         if (value == null) {
             throw new IllegalArgumentException("Null value");
         }
         Path target = pathFor(key);
-        Files.createDirectories(target.getParent());
-        Files.write(target, value);
+        synchronized (this) {
+            Files.createDirectories(target.getParent());
+            Files.write(target, value);
+        }
     }
 
     @Override
-    public synchronized void delete(String key) throws IOException {
-        Files.deleteIfExists(pathFor(key));
+    public void delete(String key) throws IOException {
+        Path target = pathFor(key);
+        synchronized (this) {
+            Files.deleteIfExists(target);
+        }
     }
 
     @Override
