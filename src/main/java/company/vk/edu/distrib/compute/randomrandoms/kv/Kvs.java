@@ -11,6 +11,7 @@ import java.net.URI;
 import java.nio.file.Paths;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.concurrent.Executors;
 
 import static company.vk.edu.distrib.compute.randomrandoms.util.HandlerConstants.codeAndText;
 import static company.vk.edu.distrib.compute.randomrandoms.util.HandlerConstants.justCode;
@@ -24,54 +25,32 @@ public class Kvs implements KVService {
 
     private final HttpHandler entity = exc -> {
         try {
+            String key;
+            try {
+                key = parseUri(exc.getRequestURI()).orElseThrow();
+            } catch (NoSuchElementException e) {
+                justCode(422).handle(exc);
+                return;
+            }
+            if (key.isEmpty()) {
+                justCode(INCORRECT_KEY_CODE).handle(exc);
+                return;
+            }
             if (MethodConstants.DELETE.equals(exc.getRequestMethod())) {
-                try {
-                    var key = parseUri(exc.getRequestURI()).orElseThrow();
-                    if (key.isEmpty()) {
-                        justCode(INCORRECT_KEY_CODE).handle(exc);
-                        return;
-                    }
-                    dao.delete(key);
-                    justCode(DELETED_CODE).handle(exc);
-                    return;
-                } catch (NoSuchElementException e) {
-                    justCode(422).handle(exc);
-                    return;
-                }
+                dao.delete(key);
+                justCode(DELETED_CODE).handle(exc);
+                return;
             }
             if (MethodConstants.GET.equals(exc.getRequestMethod())) {
-                String key;
-                try {
-                    key = parseUri(exc.getRequestURI()).orElseThrow();
-                } catch (NoSuchElementException e) {
-                    justCode(422).handle(exc);
-                    return;
-                }
-                if (key.isEmpty()) {
-                    justCode(INCORRECT_KEY_CODE).handle(exc);
-                    return;
-                }
                 try {
                     var value = dao.get(key);
                     codeAndText(FOUND_CODE, value).handle(exc);
-                    return;
                 } catch (NoSuchElementException e) {
                     justCode(NOT_FOUND_CODE).handle(exc);
-                    return;
                 }
+                return;
             }
             if (MethodConstants.PUT.equals(exc.getRequestMethod())) {
-                String key;
-                try {
-                    key = parseUri(exc.getRequestURI()).orElseThrow();
-                } catch (NoSuchElementException e) {
-                    justCode(422).handle(exc);
-                    return;
-                }
-                if (key.isEmpty()) {
-                    justCode(INCORRECT_KEY_CODE).handle(exc);
-                    return;
-                }
                 var value = exc.getRequestBody().readAllBytes();
                 dao.upsert(key, value);
                 justCode(PUT_CODE).handle(exc);
@@ -95,6 +74,7 @@ public class Kvs implements KVService {
 
     public Kvs(int port) throws IOException {
         server = HttpServer.create();
+        server.setExecutor(Executors.newFixedThreadPool(8));
         server.bind(new InetSocketAddress("localhost", port), 0);
         server.createContext(STATUS, status);
         server.createContext(ENTITY, entity);

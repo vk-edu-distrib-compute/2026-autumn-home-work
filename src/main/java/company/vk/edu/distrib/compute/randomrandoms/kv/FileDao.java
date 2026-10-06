@@ -11,8 +11,10 @@ import java.nio.file.StandardOpenOption;
 import java.util.Base64;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class FileDao implements Dao<byte[]> {
+    private final ReentrantLock lock;
     private final OutputStream stream;
     private final RamDao<byte[]> ramDao;
 
@@ -30,13 +32,17 @@ public class FileDao implements Dao<byte[]> {
 
     @Override
     public void upsert(String key, byte[] value) throws IllegalArgumentException, IOException {
+        lock.lock();
         stream.write(Command.upsert(key, value).dump());
+        lock.unlock();
         ramDao.upsert(key, value);
     }
 
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
+        lock.lock();
         stream.write(Command.delete(key).dump());
+        lock.unlock();
         ramDao.delete(key);
     }
 
@@ -107,6 +113,7 @@ public class FileDao implements Dao<byte[]> {
         try (var reader = Files.newBufferedReader(fname)) {
             reader.lines().forEach(line -> run(ramDao, Command.fromDump(line)));
         }
+        lock = new ReentrantLock();
         stream = Files.newOutputStream(fname, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 }
