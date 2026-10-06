@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.test.urlshortener;
 
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.HttpStatus;
 import company.vk.edu.distrib.compute.kv.RemoteDaoFactory;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 import org.junit.jupiter.api.AfterAll;
@@ -159,7 +160,7 @@ public class ShardingTest {
         List<Integer> idNodes = new ArrayList<>();
         for (int remotePort : remotePorts) {
             runHttpCtx(HTTP_CLIENT, remotePort, () -> {
-                if (get(ENTITY_PATH + id).statusCode() == 200) {
+                if (get(ENTITY_PATH + id).statusCode() == HttpStatus.OK.code()) {
                     idNodes.add(remotePort);
                 }
             });
