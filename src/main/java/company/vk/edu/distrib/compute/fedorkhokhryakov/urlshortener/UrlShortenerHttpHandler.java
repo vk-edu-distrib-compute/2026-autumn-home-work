@@ -18,6 +18,14 @@ private static final String LOCATION = "Location";
 private static final String WWW_AUTHENTICATE = "WWW-Authenticate";
 private static final String BASIC = "Basic";
 
+private static final int OK = 200;
+private static final int CREATED = 201;
+private static final int ACCEPTED = 202;
+private static final int MOVED_PERMANENTLY = 301;
+private static final int NOT_FOUND = 404;
+private static final int UNPROCESSABLE_CONTENT = 422;
+private static final int UNAUTHORIZED = 401;
+
 private final int port;
 private final InMemoryDao<String> dao;
 private final InMemoryUserDao userDao;
@@ -36,11 +44,11 @@ public UrlShortenerHttpHandler(
 
 public void handleStatus(HttpExchange exchange) throws IOException {
     if (!GET.equals(exchange.getRequestMethod())) {
-        sendResponse(exchange, 404, "");
+        sendResponse(exchange, NOT_FOUND, "");
         return;
     }
 
-    sendResponse(exchange, 200, "");
+    sendResponse(exchange, OK, "");
 }
 
 public void handleLinks(HttpExchange exchange) throws IOException {
@@ -57,14 +65,14 @@ public void handleLinks(HttpExchange exchange) throws IOException {
     }
 
     if (!path.startsWith(LINKS_PATH + ROOT_PATH)) {
-        sendResponse(exchange, 404, "");
+        sendResponse(exchange, NOT_FOUND, "");
         return;
     }
 
     String id = path.substring((LINKS_PATH + ROOT_PATH).length());
 
     if (!UrlShortenerUtils.isValidId(id)) {
-        sendResponse(exchange, 422, "");
+        sendResponse(exchange, UNPROCESSABLE_CONTENT, "");
         return;
     }
 
@@ -73,21 +81,21 @@ public void handleLinks(HttpExchange exchange) throws IOException {
 
 public void handleRedirect(HttpExchange exchange) throws IOException {
     if (!GET.equals(exchange.getRequestMethod())) {
-        sendResponse(exchange, 404, "");
+        sendResponse(exchange, NOT_FOUND, "");
         return;
     }
 
     String path = exchange.getRequestURI().getPath();
 
     if (path.length() <= 1 || !path.startsWith(ROOT_PATH)) {
-        sendResponse(exchange, 404, "");
+        sendResponse(exchange, NOT_FOUND, "");
         return;
     }
 
     String id = path.substring(ROOT_PATH.length());
 
     if (!UrlShortenerUtils.isValidId(id)) {
-        sendResponse(exchange, 422, "");
+        sendResponse(exchange, UNPROCESSABLE_CONTENT, "");
         return;
     }
 
@@ -96,16 +104,16 @@ public void handleRedirect(HttpExchange exchange) throws IOException {
             String longLink = dao.get(id);
 
             exchange.getResponseHeaders().set(LOCATION, longLink);
-            exchange.sendResponseHeaders(301, -1);
+            exchange.sendResponseHeaders(MOVED_PERMANENTLY, -1);
         } catch (NoSuchElementException e) {
-            sendResponse(exchange, 404, "");
+            sendResponse(exchange, NOT_FOUND, "");
         }
     }
 }
 
 public void handleUsers(HttpExchange exchange) throws IOException {
     if (!POST.equals(exchange.getRequestMethod())) {
-        sendResponse(exchange, 404, "");
+        sendResponse(exchange, NOT_FOUND, "");
         return;
     }
 
@@ -113,7 +121,7 @@ public void handleUsers(HttpExchange exchange) throws IOException {
     int separator = body.indexOf(':');
 
     if (separator <= 0 || separator == body.length() - 1) {
-        sendResponse(exchange, 422, "");
+        sendResponse(exchange, UNPROCESSABLE_CONTENT, "");
         return;
     }
 
@@ -121,14 +129,14 @@ public void handleUsers(HttpExchange exchange) throws IOException {
     String password = body.substring(separator + 1);
 
     userDao.upsert(username, password);
-    sendResponse(exchange, 200, "");
+    sendResponse(exchange, OK, "");
 }
 
 private void handleLinksRoot(HttpExchange exchange) throws IOException {
     if (POST.equals(exchange.getRequestMethod())) {
         handleCreate(exchange);
     } else {
-        sendResponse(exchange, 404, "");
+        sendResponse(exchange, NOT_FOUND, "");
     }
 }
 
@@ -137,7 +145,7 @@ private void handleLinkById(HttpExchange exchange, String id) throws IOException
         case GET -> handleGet(exchange, id);
         case PUT -> handleUpdate(exchange, id);
         case DELETE -> handleDelete(exchange, id);
-        default -> sendResponse(exchange, 404, "");
+        default -> sendResponse(exchange, NOT_FOUND, "");
     }
 }
 
@@ -145,7 +153,7 @@ private void handleCreate(HttpExchange exchange) throws IOException {
     String longLink = readBody(exchange);
 
     if (!UrlShortenerUtils.isValidLink(longLink)) {
-        sendResponse(exchange, 422, "");
+        sendResponse(exchange, UNPROCESSABLE_CONTENT, "");
         return;
     }
 
@@ -159,15 +167,15 @@ private void handleCreate(HttpExchange exchange) throws IOException {
 
     String shortLink = "http://localhost:" + port + "/" + id;
 
-    sendResponse(exchange, 201, shortLink);
+    sendResponse(exchange, CREATED, shortLink);
 }
 
 private void handleGet(HttpExchange exchange, String id) throws IOException {
     try {
         String longLink = dao.get(id);
-        sendResponse(exchange, 200, longLink);
+        sendResponse(exchange, OK, longLink);
     } catch (NoSuchElementException e) {
-        sendResponse(exchange, 404, "");
+        sendResponse(exchange, NOT_FOUND, "");
     }
 }
 
@@ -175,24 +183,24 @@ private void handleUpdate(HttpExchange exchange, String id) throws IOException {
     String longLink = readBody(exchange);
 
     if (!UrlShortenerUtils.isValidLink(longLink)) {
-        sendResponse(exchange, 422, "");
+        sendResponse(exchange, UNPROCESSABLE_CONTENT, "");
         return;
     }
 
     try {
         dao.get(id);
     } catch (NoSuchElementException e) {
-        sendResponse(exchange, 404, "");
+        sendResponse(exchange, NOT_FOUND, "");
         return;
     }
 
     dao.upsert(id, longLink);
-    sendResponse(exchange, 200, "");
+    sendResponse(exchange, OK, "");
 }
 
 private void handleDelete(HttpExchange exchange, String id) throws IOException {
     dao.delete(id);
-    sendResponse(exchange, 202, "");
+    sendResponse(exchange, ACCEPTED, "");
 }
 
 private String readBody(HttpExchange exchange) throws IOException {
@@ -227,7 +235,7 @@ private static void sendResponse(HttpExchange exchange, int status, String body)
 
 private void sendUnauthorized(HttpExchange exchange) throws IOException {
     exchange.getResponseHeaders().set(WWW_AUTHENTICATE, BASIC);
-    sendResponse(exchange, 401, "");
+    sendResponse(exchange, UNAUTHORIZED, "");
 }
 
 private static boolean isLinksRoot(String path) {

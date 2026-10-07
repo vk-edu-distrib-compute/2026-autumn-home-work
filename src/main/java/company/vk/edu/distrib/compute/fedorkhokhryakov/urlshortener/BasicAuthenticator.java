@@ -7,6 +7,8 @@ import java.util.Base64;
 import java.util.NoSuchElementException;
 
 public class BasicAuthenticator {
+    private static final String BASIC_PREFIX = "Basic ";
+
     private final InMemoryUserDao userDao;
 
     public BasicAuthenticator(InMemoryUserDao userDao) {
@@ -16,12 +18,12 @@ public class BasicAuthenticator {
     public boolean authenticate(HttpExchange exchange) {
         String authorization = exchange.getRequestHeaders().getFirst("Authorization");
 
-        if (authorization == null || !authorization.startsWith("Basic ")) {
+        if (authorization == null || !authorization.startsWith(BASIC_PREFIX)) {
             return false;
         }
 
         try {
-            String encoded = authorization.substring("Basic ".length());
+            String encoded = authorization.substring(BASIC_PREFIX.length());
             String decoded = new String(
                 Base64.getDecoder().decode(encoded),
                 StandardCharsets.UTF_8
