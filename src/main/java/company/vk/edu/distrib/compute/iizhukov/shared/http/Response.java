@@ -1,16 +1,22 @@
-package company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers;
+package company.vk.edu.distrib.compute.iizhukov.shared.http;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public record Response(int status, String content, Map<String, String> headers) {
+public record Response(int status, byte[] content, Map<String, String> headers) {
     public Response {
+        content = content.clone();
         headers = Map.copyOf(headers);
     }
 
+    @Override
+    public byte[] content() {
+        return content.clone();
+    }
+
     public int length() {
-        return content.getBytes(StandardCharsets.UTF_8).length;
+        return content.length;
     }
 
     public static Builder builder() {
@@ -19,7 +25,7 @@ public record Response(int status, String content, Map<String, String> headers) 
 
     public static final class Builder {
         private HttpStatus status = HttpStatus.METHOD_NOT_ALLOWED;
-        private String content = "";
+        private byte[] content = new byte[0];
         private final Map<String, String> headers = new ConcurrentHashMap<>(Map.of(
                 "Content-Type", "text/html; charset=utf-8"
         ));
@@ -34,12 +40,16 @@ public record Response(int status, String content, Map<String, String> headers) 
         }
 
         public Builder setContent(String content) {
-            this.content = content;
+            return setContent(content.getBytes(StandardCharsets.UTF_8));
+        }
+
+        public Builder setContent(byte[] content) {
+            this.content = content.clone();
             return this;
         }
 
         public Builder addHeader(String key, String value) {
-            this.headers.put(key, value);
+            headers.put(key, value);
             return this;
         }
 

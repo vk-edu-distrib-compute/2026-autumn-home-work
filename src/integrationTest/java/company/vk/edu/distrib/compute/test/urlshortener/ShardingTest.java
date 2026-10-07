@@ -2,7 +2,7 @@ package company.vk.edu.distrib.compute.test.urlshortener;
 
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.Dao;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.HttpStatus;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.HttpStatus;
 import company.vk.edu.distrib.compute.kv.KVService;
 import company.vk.edu.distrib.compute.kv.RemoteDaoFactory;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;

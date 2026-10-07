@@ -1,10 +1,11 @@
-package company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.middlewares;
+package company.vk.edu.distrib.compute.iizhukov.kv.api.helpers.middlewares;
+
+import java.util.NoSuchElementException;
 
 import company.vk.edu.distrib.compute.iizhukov.shared.http.Handler;
 import company.vk.edu.distrib.compute.iizhukov.shared.http.HttpStatus;
 import company.vk.edu.distrib.compute.iizhukov.shared.http.Middleware;
 import company.vk.edu.distrib.compute.iizhukov.shared.http.Response;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.db.StorageException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,12 +19,11 @@ public final class ErrorHandlingMiddleware implements Middleware {
                 return handler.handle(request);
             } catch (IllegalArgumentException e) {
                 return Response.builder()
-                        .setStatus(HttpStatus.UNPROCESSABLE_CONTENT)
+                        .setStatus(HttpStatus.BAD_REQUEST)
                         .build();
-            } catch (StorageException e) {
-                log.error("Request processing failed", e);
+            } catch (NoSuchElementException e) {
                 return Response.builder()
-                        .setStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .setStatus(HttpStatus.NOT_FOUND)
                         .build();
             } catch (Exception e) {
                 log.error("Unhandled exception", e);

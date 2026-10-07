@@ -1,11 +1,11 @@
 package company.vk.edu.distrib.compute.iizhukov.urlshortener.api.v0;
 
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.BaseController;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.HttpStatus;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Request;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Response;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.BaseController;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.HttpStatus;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Request;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Response;
 
-public class StatusController extends BaseController {
+public class StatusController extends BaseController<Void> {
     public StatusController(int port) {
         super(port);
     }
