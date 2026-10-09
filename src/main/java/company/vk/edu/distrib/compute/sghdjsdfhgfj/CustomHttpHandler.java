@@ -1,7 +1,6 @@
-package company.vk.edu.distrib.compute.sghdjsdfhgfj.urlshortener.handlers;
+package company.vk.edu.distrib.compute.sghdjsdfhgfj;
 
 import com.sun.net.httpserver.HttpExchange;
-import company.vk.edu.distrib.compute.sghdjsdfhgfj.urlshortener.StatusCodeException;
 
 import java.io.IOException;
 
