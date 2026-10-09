@@ -1,11 +1,11 @@
-package company.vk.edu.distrib.compute.miiishenka.urlshortener.controller;
+package company.vk.edu.distrib.compute.miiishenka.kv.controller;
 
 import java.io.IOException;
 
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.miiishenka.http.exception.HttpStatusException;
 
-public class StatusController extends BaseUrlShortenerController {
+public class StatusController extends BaseKVController {
     @Override
     public String getPath() {
         return "/v0/status";

@@ -6,7 +6,7 @@ import java.util.Base64;
 
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
-import company.vk.edu.distrib.compute.miiishenka.urlshortener.exception.UnauthorizedException;
+import company.vk.edu.distrib.compute.miiishenka.http.exception.UnauthorizedException;
 
 public class BasicAuthenticator {
     private static final String AUTHORIZATION_HEADER = "Authorization";
