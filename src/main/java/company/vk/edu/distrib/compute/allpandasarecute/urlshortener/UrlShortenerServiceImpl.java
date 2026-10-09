@@ -6,6 +6,7 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.sun.net.httpserver.HttpServer;
 import org.slf4j.Logger;
@@ -26,16 +27,31 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     private final HttpServer server;
     private final ExecutorService executor;
     private final AtomicBoolean started = new AtomicBoolean();
+    private final AtomicBoolean stopped = new AtomicBoolean();
+    private final AtomicReference<Dao<String>> links = new AtomicReference<>();
 
     public UrlShortenerServiceImpl(int port, Dao<String> links, Dao<String> users) throws IOException {
         this.port = port;
+        this.links.set(links);
         this.executor = Executors.newFixedThreadPool(WORKER_THREADS);
         this.server = HttpServer.create();
         server.setExecutor(executor);
         server.createContext(STATUS_PATH, new StatusHandler());
         server.createContext(USERS_PATH, new UsersHandler(users));
-        server.createContext(LINKS_PATH, new LinksHandler(port, links, new BasicAuthenticator(users)));
-        server.createContext("/", new RedirectHandler(links));
+        server.createContext(LINKS_PATH, new LinksHandler(port, this::linksDao, new BasicAuthenticator(users)));
+        server.createContext("/", new RedirectHandler(this::linksDao));
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        if (started.get() || stopped.get()) {
+            throw new IllegalStateException("Can not change links dao after start or stop");
+        }
+        links.set(dao);
+    }
+
+    private Dao<String> linksDao() {
+        return links.get();
     }
 
     @Override
@@ -57,6 +73,7 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
         if (!started.getAndSet(false)) {
             return;
         }
+        stopped.set(true);
         server.stop(1);
         executor.shutdownNow();
         log.info("URL shortener on port {} is stopped", port);
