@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.allpandasarecute.urlshortener;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -22,6 +23,8 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     private static final String LINKS_PATH = "/v0/links";
     private static final String USERS_PATH = "/internal/users";
     private static final int WORKER_THREADS = 4;
+    private static final int BIND_ATTEMPTS = 5;
+    private static final int BIND_RETRY_DELAY_MS = 100;
 
     private final int port;
     private final HttpServer server;
@@ -59,13 +62,34 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
         if (!started.compareAndSet(false, true)) {
             throw new IllegalStateException("Service is already started");
         }
-        try {
-            server.bind(new InetSocketAddress(port), 0);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Can not bind to port " + port, e);
-        }
+        bind();
         server.start();
         log.info("URL shortener is listening on port {}", port);
+    }
+
+    private void bind() {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                server.bind(new InetSocketAddress(port), 0);
+                return;
+            } catch (BindException e) {
+                if (attempt == BIND_ATTEMPTS) {
+                    throw new UncheckedIOException("Can not bind to port " + port, e);
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException("Can not bind to port " + port, e);
+            }
+            sleepBeforeBindRetry();
+        }
+    }
+
+    private static void sleepBeforeBindRetry() {
+        try {
+            Thread.sleep(BIND_RETRY_DELAY_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new UncheckedIOException(new IOException("Interrupted while binding", e));
+        }
     }
 
     @Override

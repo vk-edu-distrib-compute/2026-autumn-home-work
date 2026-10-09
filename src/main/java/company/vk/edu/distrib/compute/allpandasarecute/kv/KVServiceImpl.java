@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.allpandasarecute.kv;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +42,9 @@ public class KVServiceImpl implements KVService {
     private static final String PUT_METHOD = "PUT";
     private static final String DELETE_METHOD = "DELETE";
 
+    private static final int BIND_ATTEMPTS = 5;
+    private static final int BIND_RETRY_DELAY_MS = 100;
+
     private final int port;
     private final Dao<byte[]> dao;
     private final HttpServer server;
@@ -64,13 +68,34 @@ public class KVServiceImpl implements KVService {
         if (!started.compareAndSet(false, true)) {
             throw new IllegalStateException("Service is already started");
         }
-        try {
-            server.bind(new InetSocketAddress(port), 0);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Can not bind to port " + port, e);
-        }
+        bind();
         server.start();
         log.info("KV service is listening on port {}", port);
+    }
+
+    private void bind() {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                server.bind(new InetSocketAddress(port), 0);
+                return;
+            } catch (BindException e) {
+                if (attempt == BIND_ATTEMPTS) {
+                    throw new UncheckedIOException("Can not bind to port " + port, e);
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException("Can not bind to port " + port, e);
+            }
+            sleepBeforeBindRetry();
+        }
+    }
+
+    private static void sleepBeforeBindRetry() {
+        try {
+            Thread.sleep(BIND_RETRY_DELAY_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new UncheckedIOException(new IOException("Interrupted while binding", e));
+        }
     }
 
     @Override
