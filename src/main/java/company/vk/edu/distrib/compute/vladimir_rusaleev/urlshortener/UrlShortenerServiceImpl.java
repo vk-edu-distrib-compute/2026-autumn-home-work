@@ -16,11 +16,13 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
     private static final char SLASH = '/';
 
     private HttpServer server;
-    private final Dao<String> links;
+    private Dao<String> links;
     private final Dao<String> users;
-    private final UrlLinks linkApi;
+    private UrlLinks linkApi;
     private final UserAuth userAuth;
     private final int port;
+    private boolean started;
+    private boolean stopped;
 
     public UrlShortenerServiceImpl(int port) throws IOException {
         Path root = Path.of(System.getProperty("user.home"), ".vk-urlshortener", "vladimir");
@@ -33,10 +35,14 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
 
     @Override
     public void start() {
+        if (started || stopped) {
+            throw new IllegalStateException("Service already started or stopped");
+        }
         try {
             server = HttpServer.create(new InetSocketAddress("localhost", port), 0);
             server.createContext("/", this::handle);
             server.start();
+            started = true;
         } catch (IOException exception) {
             throw new UncheckedIOException("Could not start server", exception);
         }
@@ -44,6 +50,7 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
 
     @Override
     public void stop() {
+        stopped = true;
         if (server != null) {
             server.stop(1);
         }
@@ -53,6 +60,26 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
         } catch (IOException exception) {
             throw new IllegalStateException("Could not close stores", exception);
         }
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        if (started || stopped) {
+            throw new IllegalStateException("Storage must be set before start");
+        }
+        if (dao == null) {
+            throw new IllegalArgumentException("Null DAO");
+        }
+        if (links == dao) {
+            return;
+        }
+        try {
+            links.close();
+        } catch (IOException exception) {
+            throw new UncheckedIOException("Could not close previous storage", exception);
+        }
+        links = dao;
+        linkApi = new UrlLinks(links, port);
     }
 
     private void handle(HttpExchange exchange) throws IOException {
