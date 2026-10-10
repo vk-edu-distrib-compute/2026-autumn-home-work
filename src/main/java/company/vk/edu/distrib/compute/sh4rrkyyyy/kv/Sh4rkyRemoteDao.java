@@ -19,9 +19,13 @@ public class Sh4rkyRemoteDao implements Dao<String> {
     private static final int HTTP_ACCEPTED = 202;
     private static final int HTTP_NOT_FOUND = 404;
 
-    Sh4rkyRemoteDao(int port) {
-        this.client = HttpClient.newHttpClient();
+    Sh4rkyRemoteDao(int port, HttpClient client) {
+        this.client = client;
         this.url = "http://localhost:" + port;
+    }
+
+    Sh4rkyRemoteDao(int port) {
+       this(port, HttpClient.newHttpClient());
     }
 
     @Override
@@ -56,7 +60,7 @@ public class Sh4rkyRemoteDao implements Dao<String> {
 
     @Override
     public void close() throws IOException {
-        // nothing to close
+        client.close();
     }
 
     private HttpRequest.Builder buildReq(String key) {

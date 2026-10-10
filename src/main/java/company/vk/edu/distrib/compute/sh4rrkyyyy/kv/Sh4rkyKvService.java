@@ -26,7 +26,7 @@ public class Sh4rkyKvService implements KVService {
     Sh4rkyKvService(int port) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.setExecutor(Executors.newFixedThreadPool(1));
-        this.dao = new PersistentDao<>("kv", Serializers.BYTES);
+        this.dao = new PersistentDao<>("kv-" + port, Serializers.BYTES);
         server.createContext("/v0/status", new ErrorHandler(this::handleStatus));
         server.createContext(ENTITY_PATH, new ErrorHandler(this::handleEntity));
     }
