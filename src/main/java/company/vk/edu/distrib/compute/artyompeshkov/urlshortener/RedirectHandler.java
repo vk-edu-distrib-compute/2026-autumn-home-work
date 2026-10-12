@@ -19,11 +19,11 @@ class RedirectHandler extends BaseHandler {
 
     @Override
     protected void doHandle(HttpExchange exchange) throws IOException {
-        LinkId id = new LinkId(exchange.getRequestURI().getPath().substring(1));
         if (!GET.equals(exchange.getRequestMethod())) {
             sendMethodNotAllowed(exchange, GET);
             return;
         }
+        LinkId id = new LinkId(exchange.getRequestURI().getPath().substring(1));
         sendRedirect(exchange, links.get(id.value()));
     }
 }

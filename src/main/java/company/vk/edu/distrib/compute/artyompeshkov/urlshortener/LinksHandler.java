@@ -3,7 +3,6 @@ package company.vk.edu.distrib.compute.artyompeshkov.urlshortener;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
@@ -39,7 +38,7 @@ class LinksHandler extends BaseHandler {
         if (PATH.equals(path)) {
             handleCreate(exchange);
         } else if (path.startsWith(LINK_PATH_PREFIX)) {
-            handleIndividualOps(exchange, new LinkId(path.substring(LINK_PATH_PREFIX.length())));
+            handleIndividualOps(exchange, path.substring(LINK_PATH_PREFIX.length()));
         } else {
             exchange.sendResponseHeaders(HttpURLConnection.HTTP_NOT_FOUND, NO_BODY);
         }
@@ -53,11 +52,11 @@ class LinksHandler extends BaseHandler {
         createLink(exchange);
     }
 
-    private void handleIndividualOps(HttpExchange exchange, LinkId id) throws IOException {
+    private void handleIndividualOps(HttpExchange exchange, String rawId) throws IOException {
         switch (exchange.getRequestMethod()) {
-            case GET -> getLink(exchange, id);
-            case PUT -> updateLink(exchange, id);
-            case DELETE -> deleteLink(exchange, id);
+            case GET -> getLink(exchange, new LinkId(rawId));
+            case PUT -> updateLink(exchange, new LinkId(rawId));
+            case DELETE -> deleteLink(exchange, new LinkId(rawId));
             default -> sendMethodNotAllowed(exchange, "GET, PUT, DELETE");
         }
     }
@@ -86,7 +85,7 @@ class LinksHandler extends BaseHandler {
     }
 
     private static String readLink(HttpExchange exchange) throws IOException {
-        URI uri = URI.create(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        URI uri = URI.create(HttpUtils.readBody(exchange));
         boolean isHttp = "http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme());
         if (!isHttp || uri.getHost() == null) {
             throw new IllegalArgumentException("Not an http(s) link: " + uri);
