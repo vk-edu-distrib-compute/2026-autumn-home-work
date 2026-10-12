@@ -8,8 +8,17 @@ import com.sun.net.httpserver.HttpExchange;
 
 final class HttpUtils {
     static final long NO_BODY = -1;
+    private static final int MAX_BODY_SIZE = 8 * 1024;
 
     private HttpUtils() {
+    }
+
+    static String readBody(HttpExchange exchange) throws IOException {
+        byte[] body = exchange.getRequestBody().readNBytes(MAX_BODY_SIZE + 1);
+        if (body.length > MAX_BODY_SIZE) {
+            throw new IllegalArgumentException("Request body is too large");
+        }
+        return new String(body, StandardCharsets.UTF_8);
     }
 
     static void sendText(HttpExchange exchange, int statusCode, String text) throws IOException {

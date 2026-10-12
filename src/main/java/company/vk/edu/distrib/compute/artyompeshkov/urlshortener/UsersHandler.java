@@ -2,7 +2,6 @@ package company.vk.edu.distrib.compute.artyompeshkov.urlshortener;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
-import java.nio.charset.StandardCharsets;
 
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
@@ -25,8 +24,7 @@ class UsersHandler extends BaseHandler {
             sendMethodNotAllowed(exchange, POST);
             return;
         }
-        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        User user = SimpleAuth.parseUser(body);
+        User user = SimpleAuth.parseUser(HttpUtils.readBody(exchange));
         users.upsert(user.name(), user.password());
         exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, NO_BODY);
     }
