@@ -22,7 +22,7 @@ public class Cloudyy74KVService implements KVService {
 
     private final HttpServer server;
     private final Optional<ExecutorService> executor;
-    private final Cloudyy74PersistentDao dao = new Cloudyy74PersistentDao("./out/kv.log");
+    private final Cloudyy74PersistentDao dao;
 
     private static final int MIN_WORKER_THREADS = 1;
     private static final int QUERY_PARAMETER_PARTS = 2;
@@ -37,6 +37,7 @@ public class Cloudyy74KVService implements KVService {
         if (threads < MIN_WORKER_THREADS) {
             throw new IllegalArgumentException("Invalid worker thread count");
         }
+        this.dao = new Cloudyy74PersistentDao("./out/kv-%d.log".formatted(port));
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.executor = threads > MIN_WORKER_THREADS
                 ? Optional.of(Executors.newFixedThreadPool(threads)) : Optional.empty();
