@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 public class KVServiceImpl implements KVService {
     static final String ENTRY_STR = "/v0/entity";
     static final String ID_STR = "id=";
+    private static final int MAX_VALUE_SIZE = 1024 * 1024;
     private static final Logger log = LoggerFactory.getLogger(KVServiceImpl.class);
 
     private final BitcaskDao dao;
@@ -75,7 +76,11 @@ public class KVServiceImpl implements KVService {
         switch (exchange.getRequestMethod()) {
             case "GET" -> sendValue(exchange, dao.get(id));
             case "PUT" -> {
-                dao.upsert(id, exchange.getRequestBody().readAllBytes());
+                byte[] value = exchange.getRequestBody().readNBytes(MAX_VALUE_SIZE + 1);
+                if (value.length > MAX_VALUE_SIZE) {
+                    throw new IllegalArgumentException("Value is too large");
+                }
+                dao.upsert(id, value);
                 exchange.sendResponseHeaders(HttpURLConnection.HTTP_CREATED, -1);
             }
             case "DELETE" -> {
