@@ -55,6 +55,7 @@ final class EntityHandler implements KVRequestHandler.ThrowingHandler {
      * Извлечь и проверить параметр {@code id} из query строки запроса.
      *
      * @param exchange проверяемый обмен данными
+     * @return непустой идентификатор
      * @throws IllegalArgumentException если параметр отсутствует или пуст
      */
     private static String requireId(HttpExchange exchange) {
