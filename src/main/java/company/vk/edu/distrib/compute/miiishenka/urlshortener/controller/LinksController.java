@@ -9,11 +9,11 @@ import java.security.SecureRandom;
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.miiishenka.urlshortener.authorization.BasicAuthenticator;
-import company.vk.edu.distrib.compute.miiishenka.urlshortener.exception.HttpStatusException;
-import company.vk.edu.distrib.compute.miiishenka.urlshortener.exception.NotFoundException;
-import company.vk.edu.distrib.compute.miiishenka.urlshortener.exception.UnprocessableContentException;
+import company.vk.edu.distrib.compute.miiishenka.http.exception.HttpStatusException;
+import company.vk.edu.distrib.compute.miiishenka.http.exception.NotFoundException;
+import company.vk.edu.distrib.compute.miiishenka.http.exception.UnprocessableContentException;
 
-public class LinksController extends BaseController {
+public class LinksController extends BaseUrlShortenerController {
     private static final String ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
     private static final SecureRandom RANDOM = new SecureRandom();
