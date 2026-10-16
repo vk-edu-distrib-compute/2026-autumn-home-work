@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.virogg.urlshortener;
+package company.vk.edu.distrib.compute.virogg.urlshortener.links;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -12,14 +12,14 @@ import company.vk.edu.distrib.compute.Dao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class UsersAuthenticator extends BasicAuthenticator {
+final class UsersAuthenticator extends BasicAuthenticator {
     private static final String REALM = "urlshortener";
     private static final String CHALLENGE = "Basic realm=\"" + REALM + "\", charset=\"UTF-8\"";
     private static final Logger log = LoggerFactory.getLogger(UsersAuthenticator.class);
 
     private final Dao<String> users;
 
-    public UsersAuthenticator(Dao<String> users) {
+    UsersAuthenticator(Dao<String> users) {
         super(REALM, StandardCharsets.UTF_8);
         this.users = users;
     }
