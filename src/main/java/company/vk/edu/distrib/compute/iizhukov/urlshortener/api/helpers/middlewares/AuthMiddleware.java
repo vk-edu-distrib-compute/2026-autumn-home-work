@@ -4,10 +4,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.NoSuchElementException;
 
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Handler;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.HttpStatus;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Middleware;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Response;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Handler;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.HttpStatus;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Middleware;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Response;
 import company.vk.edu.distrib.compute.iizhukov.urlshortener.db.dao.UserDao;
 
 public class AuthMiddleware implements Middleware {

@@ -1,12 +1,12 @@
 package company.vk.edu.distrib.compute.iizhukov.urlshortener.api.v0;
 
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.BaseController;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.HttpStatus;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Request;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Response;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.BaseController;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.HttpStatus;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Request;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Response;
 import company.vk.edu.distrib.compute.iizhukov.urlshortener.db.dao.UserDao;
 
-public class InternalUsersController extends BaseController {
+public class InternalUsersController extends BaseController<String> {
     private final UserDao dao = UserDao.create();
 
     public InternalUsersController(int port) {
