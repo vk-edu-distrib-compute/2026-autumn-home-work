@@ -1,8 +1,7 @@
-package company.vk.edu.distrib.compute.sghdjsdfhgfj.urlshortener.handlers;
+package company.vk.edu.distrib.compute.sghdjsdfhgfj;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-import company.vk.edu.distrib.compute.sghdjsdfhgfj.urlshortener.StatusCodeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,7 +9,7 @@ import java.io.IOException;
 
 public class CustomHttpHandlerTranslator implements HttpHandler {
     private final CustomHttpHandler handler;
-    private static final Logger LOG = LoggerFactory.getLogger(CustomHttpHandlerTranslator.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(CustomHttpHandlerTranslator.class);
 
     public CustomHttpHandlerTranslator(CustomHttpHandler handler) {
         this.handler = handler;
@@ -28,10 +27,16 @@ public class CustomHttpHandlerTranslator implements HttpHandler {
                 default -> httpExchange.sendResponseHeaders(404, 0);
             }
         } catch (StatusCodeException e) {
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("{} {} - returned {}",
+                        httpExchange.getRequestMethod(),
+                        httpExchange.getRequestURI(),
+                        e.getStatusCode());
+            }
             httpExchange.sendResponseHeaders(e.getStatusCode(), 0);
         } catch (Exception e) {
-            if (LOG.isErrorEnabled()) {
-                LOG.error(e.getMessage(), e);
+            if (LOGGER.isErrorEnabled()) {
+                LOGGER.error(e.getMessage(), e);
             }
             httpExchange.sendResponseHeaders(500, 0);
             httpExchange.getResponseBody().write(e.toString().getBytes());
