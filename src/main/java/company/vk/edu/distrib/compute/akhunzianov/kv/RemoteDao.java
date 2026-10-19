@@ -12,7 +12,6 @@ import java.time.Duration;
 import java.util.NoSuchElementException;
 
 import company.vk.edu.distrib.compute.Dao;
-import company.vk.edu.distrib.compute.kv.KVService;
 
 public class RemoteDao implements Dao<String> {
 
@@ -25,11 +24,9 @@ public class RemoteDao implements Dao<String> {
 
     private final HttpClient client = HttpClient.newHttpClient();
     private final String base;
-    private final KVService service;
 
-    public RemoteDao(int port, KVService service) {
+    public RemoteDao(int port) {
         this.base = "http://localhost:" + port + "/v0/entity?id=";
-        this.service = service;
     }
 
     @Override
@@ -56,7 +53,6 @@ public class RemoteDao implements Dao<String> {
     @Override
     public void close() {
         client.close();
-        service.stop();
     }
 
     private HttpRequest.Builder request(String key) {
