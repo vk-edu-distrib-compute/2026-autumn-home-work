@@ -41,10 +41,13 @@ public class KVServiceImpl implements KVService {
     private static final int BAD_REQUEST_CODE = 400;
     private static final int NOT_FOUND_CODE = 404;
     private static final int METHOD_NOT_ALLOWED_CODE = 405;
+    private static final int PAYLOAD_TOO_LARGE_CODE = 413;
     private static final int INTERNAL_ERROR_CODE = 500;
 
     private static final int SINGLE_THREAD = 1;
     private static final int NO_BODY = -1;
+    private static final int MAX_BODY = 1 << 20;
+    private static final int STOP_DELAY_SECONDS = 1;
     private static final int NOT_SENT = -1;
 
     private final int port;
@@ -91,7 +94,7 @@ public class KVServiceImpl implements KVService {
         if (server == null || stopped) {
             throw new IllegalStateException("Not started");
         }
-        server.stop(0);
+        server.stop(STOP_DELAY_SECONDS);
         if (workers != null) {
             workers.shutdown();
         }
@@ -130,7 +133,12 @@ public class KVServiceImpl implements KVService {
     }
 
     private void write(HttpExchange exchange, String key) throws IOException {
-        dao.upsert(key, exchange.getRequestBody().readAllBytes());
+        var body = exchange.getRequestBody().readNBytes(MAX_BODY + 1);
+        if (body.length > MAX_BODY) {
+            reply(exchange, PAYLOAD_TOO_LARGE_CODE);
+            return;
+        }
+        dao.upsert(key, body);
         reply(exchange, CREATED_CODE);
     }
 
@@ -195,6 +203,5 @@ public class KVServiceImpl implements KVService {
         try (var out = exchange.getResponseBody()) {
             out.write(body);
         }
-        exchange.close();
     }
 }
