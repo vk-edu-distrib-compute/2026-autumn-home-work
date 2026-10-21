@@ -31,13 +31,14 @@ class KVServiceReplicationTest {
 
     private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
     private static final String ENTITY_PATH = "/v0/entity?id=";
+    public static final String CLUSTER = "CLUSTER";
 
     @Parameter
     AbstractHttpServiceFactory<KVService> kvServiceFactory;
 
     @AfterEach
     void afterEach() {
-        System.clearProperty("CLUSTER");
+        System.clearProperty(CLUSTER);
     }
 
     @AfterAll
@@ -49,7 +50,7 @@ class KVServiceReplicationTest {
     void quorumWriteReadSuccess() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             var cluster = makeCluster(5); // Start with 5 nodes
-            System.setProperty("CLUSTER", describeCluster(cluster));
+            System.setProperty(CLUSTER, describeCluster(cluster));
             try {
                 String key = randomKey();
                 byte[] value = randomValue();
@@ -74,7 +75,7 @@ class KVServiceReplicationTest {
     void quorumWriteDeleteReadSuccess() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             var cluster = makeCluster(5); // Start with 5 nodes
-            System.setProperty("CLUSTER", describeCluster(cluster));
+            System.setProperty(CLUSTER, describeCluster(cluster));
             try {
                 String key = randomKey();
                 byte[] value = randomValue();
@@ -101,7 +102,7 @@ class KVServiceReplicationTest {
     void quorumWriteFailure() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             var cluster = makeCluster(3);
-            System.setProperty("CLUSTER", describeCluster(cluster));
+            System.setProperty(CLUSTER, describeCluster(cluster));
             try {
                 String key = randomKey();
                 byte[] value = randomValue();
@@ -119,7 +120,7 @@ class KVServiceReplicationTest {
     void quorumReadFailure() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             var cluster = makeCluster(3);
-            System.setProperty("CLUSTER", describeCluster(cluster));
+            System.setProperty(CLUSTER, describeCluster(cluster));
             try {
                 String key = randomKey();
                 byte[] value = randomValue();
@@ -143,7 +144,7 @@ class KVServiceReplicationTest {
     void ackTooLarge() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             var cluster = makeCluster(1);
-            System.setProperty("CLUSTER", describeCluster(cluster));
+            System.setProperty(CLUSTER, describeCluster(cluster));
             try {
                 String key = randomKey();
                 byte[] value = randomValue();
@@ -160,7 +161,7 @@ class KVServiceReplicationTest {
     void ackIsZero() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             var cluster = makeCluster(1);
-            System.setProperty("CLUSTER", describeCluster(cluster));
+            System.setProperty(CLUSTER, describeCluster(cluster));
             try {
                 String key = randomKey();
 
