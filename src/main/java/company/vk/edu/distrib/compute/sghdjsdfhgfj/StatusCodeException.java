@@ -1,4 +1,6 @@
-package company.vk.edu.distrib.compute.sghdjsdfhgfj.urlshortener;
+package company.vk.edu.distrib.compute.sghdjsdfhgfj;
+
+import company.vk.edu.distrib.compute.StatusCode;
 
 import java.io.Serial;
 
@@ -17,18 +19,22 @@ public class StatusCodeException extends Exception {
     }
 
     public static StatusCodeException methodNotAllowed() {
-        return new StatusCodeException(405);
+        return new StatusCodeException(StatusCode.METHOD_NOT_ALLOWED.getCode());
     }
 
     public static StatusCodeException unauthorized() {
-        return new StatusCodeException(401);
+        return new StatusCodeException(StatusCode.UNAUTHORIZED.getCode());
     }
 
     public static StatusCodeException unprocessable() {
-        return new StatusCodeException(422);
+        return new StatusCodeException(StatusCode.UNPROCESSABLE_ENTITY.getCode());
     }
 
     public static StatusCodeException notFound() {
-        return new StatusCodeException(404);
+        return new StatusCodeException(StatusCode.NOT_FOUND.getCode());
+    }
+
+    public static StatusCodeException badRequest() {
+        return new StatusCodeException(StatusCode.BAD_REQUEST.getCode());
     }
 }
