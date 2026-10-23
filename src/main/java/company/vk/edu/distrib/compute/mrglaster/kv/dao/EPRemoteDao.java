@@ -90,8 +90,8 @@ public class EPRemoteDao implements Dao<String> {
     }
 
     private static void requireKey(String key) {
-        if (key == null) {
-            throw new IllegalArgumentException("Key cannot be null");
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("Key cannot be null or blank");
         }
     }
 
@@ -101,5 +101,9 @@ public class EPRemoteDao implements Dao<String> {
 
     private String unexpectedStatus(String key, int status) {
         return "Unexpected status %d for %s".formatted(status, uri(key));
+    }
+
+    public int getPort() {
+        return this.port;
     }
 }
