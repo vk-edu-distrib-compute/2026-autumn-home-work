@@ -11,6 +11,7 @@ import java.net.URI;
 import java.nio.file.Paths;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 import static company.vk.edu.distrib.compute.randomrandoms.util.HandlerConstants.codeAndText;
@@ -20,7 +21,7 @@ public class Kvs implements KVService {
     private final FileDao dao = new FileDao(Paths.get(FILE));
 
     private final HttpServer server;
-
+    private final Executor executor = Executors.newFixedThreadPool(1);
     private final HttpHandler status = justCode(200);
 
     private final HttpHandler entity = exc -> {
@@ -75,7 +76,7 @@ public class Kvs implements KVService {
 
     public Kvs(int port) throws IOException {
         server = HttpServer.create();
-        server.setExecutor(Executors.newFixedThreadPool(8));
+        server.setExecutor(executor);
         server.bind(new InetSocketAddress("localhost", port), 0);
         server.createContext(STATUS, status);
         server.createContext(ENTITY, entity);
@@ -83,7 +84,7 @@ public class Kvs implements KVService {
 
     private Optional<String> parseUri(URI uri) {
         var query = uri.getQuery();
-        if (!query.startsWith(QUERY)) {
+        if (query == null || !query.startsWith(QUERY)) {
             return Optional.empty();
         }
         return Optional.of(query.substring(QUERY.length()));

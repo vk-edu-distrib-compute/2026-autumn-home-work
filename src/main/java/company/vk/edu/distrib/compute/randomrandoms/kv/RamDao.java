@@ -1,22 +1,23 @@
 package company.vk.edu.distrib.compute.randomrandoms.kv;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RamDao<T> implements company.vk.edu.distrib.compute.Dao<T> {
     private final Map<String, T> map;
 
     public RamDao() {
-        map = new HashMap<>();
+        map = new ConcurrentHashMap<>();
     }
 
     @Override
     public T get(String key) throws NoSuchElementException, IllegalArgumentException {
-        if (map.containsKey(key)) {
-            return map.get(key);
-        } else {
+        var val = map.get(key);
+        if (val == null) {
             throw new NoSuchElementException();
+        } else {
+            return val;
         }
     }
 

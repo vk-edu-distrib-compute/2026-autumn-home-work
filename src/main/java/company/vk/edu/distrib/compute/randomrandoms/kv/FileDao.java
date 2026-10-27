@@ -32,24 +32,30 @@ public class FileDao implements Dao<byte[]> {
 
     @Override
     public void upsert(String key, byte[] value) throws IllegalArgumentException, IOException {
-        lock.lock();
-        stream.write(Command.upsert(key, value).dump());
-        lock.unlock();
+        try {
+            lock.lock();
+            stream.write(Command.upsert(key, value).dump());
+        } finally {
+            lock.unlock();
+        }
         ramDao.upsert(key, value);
     }
 
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
-        lock.lock();
-        stream.write(Command.delete(key).dump());
-        lock.unlock();
+        try {
+            lock.lock();
+            stream.write(Command.delete(key).dump());
+        } finally {
+            lock.unlock();
+        }
         ramDao.delete(key);
     }
 
     @Override
     public void close() throws IOException {
-        stream.close();
         ramDao.close();
+        stream.close();
     }
 
     private record Command(String key, Optional<byte[]> value) {
@@ -90,7 +96,7 @@ public class FileDao implements Dao<byte[]> {
                 byte[] value = Base64.getDecoder().decode(split[1].substring(0, split[1].length() - 1));
                 return new Command(key, Optional.of(value));
             }
-            String key = cmd.substring(0, cmd.length() - 1);
+            String key = cmd.substring(0, cmd.length() - 2);
             if (!DELETE_END.equals(cmd.substring(cmd.length() - 1))) {
                 throw new IllegalStateException("incorrect dump");
             }
