@@ -49,6 +49,9 @@ public class UrlShortenerAuthSystem {
 
   private boolean checkAuth(final Request request) throws IOException {
     final List<String> authHeaders = request.getRequestHeaders().get("authorization");
+    if (authHeaders == null) {
+      return false;
+    }
     for (final String authHeader : authHeaders) {
       if (checkAuth(authHeader)) {
         return true;
@@ -61,8 +64,13 @@ public class UrlShortenerAuthSystem {
     if (!authHeader.startsWith(BASIC_PREFIX)) {
       return false;
     }
-    final byte[] encoded = authHeader.substring(BASIC_PREFIX.length()).getBytes(StandardCharsets.UTF_8);
-    final byte[] decoded = Base64.getDecoder().decode(encoded);
+    final byte[] raw = authHeader.substring(BASIC_PREFIX.length()).getBytes(StandardCharsets.UTF_8);
+    final byte[] decoded;
+    try {
+      decoded = Base64.getDecoder().decode(raw);
+    } catch (final IllegalArgumentException e) {
+      return false;
+    }
     return checkDecodedAuth(new String(decoded, StandardCharsets.UTF_8));
   }
 
