@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.sun.net.httpserver.HttpExchange;
 
@@ -34,6 +35,7 @@ public class Replication implements AutoCloseable {
     private static final int PARAM_FIELDS = 2;
     private static final int NO_BODY = -1;
     private static final Duration TIMEOUT = Duration.ofMillis(500);
+    private static final byte[] EMPTY_BODY = new byte[0];
 
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
     private final int port;
@@ -48,31 +50,43 @@ public class Replication implements AutoCloseable {
         }
         var cluster = System.getProperty(CLUSTER, System.getenv().getOrDefault(CLUSTER, ""));
         if (cluster.isBlank()) {
-            if (ackOf(exchange.getRequestURI()) != DEFAULT_ACK) {
-                finish(exchange, BAD_REQUEST_CODE, new byte[0]);
-                return true;
-            }
-            return false;
+            return handleSingle(exchange);
         }
+        coordinate(exchange, key, cluster);
+        return true;
+    }
+
+    private static boolean handleSingle(HttpExchange exchange) throws IOException {
+        if (ackOf(exchange.getRequestURI()) != DEFAULT_ACK) {
+            finish(exchange, BAD_REQUEST_CODE, EMPTY_BODY);
+            return true;
+        }
+        return false;
+    }
+
+    private void coordinate(HttpExchange exchange, String key, String cluster) throws IOException {
         var ports = Arrays.stream(cluster.split(",")).map(String::strip).mapToInt(Integer::parseInt).toArray();
         var count = replicaCount(ports.length);
         var ack = ackOf(exchange.getRequestURI());
         if (ack < DEFAULT_ACK || ack > count) {
-            finish(exchange, BAD_REQUEST_CODE, new byte[0]);
-            return true;
+            finish(exchange, BAD_REQUEST_CODE, EMPTY_BODY);
+            return;
         }
         var method = exchange.getRequestMethod();
-        if (!GET.equals(method) && !PUT.equals(method) && !DELETE.equals(method)) {
-            finish(exchange, METHOD_NOT_ALLOWED_CODE, new byte[0]);
-            return true;
+        if (!supported(method)) {
+            finish(exchange, METHOD_NOT_ALLOWED_CODE, EMPTY_BODY);
+            return;
         }
-        var body = PUT.equals(method) ? exchange.getRequestBody().readNBytes(MAX_BODY + 1) : new byte[0];
+        var body = PUT.equals(method) ? exchange.getRequestBody().readNBytes(MAX_BODY + 1) : EMPTY_BODY;
         if (body.length > MAX_BODY) {
-            finish(exchange, TOO_LARGE_CODE, new byte[0]);
-            return true;
+            finish(exchange, TOO_LARGE_CODE, EMPTY_BODY);
+            return;
         }
         forward(exchange, key, ports, count, ack, body);
-        return true;
+    }
+
+    private static boolean supported(String method) {
+        return GET.equals(method) || PUT.equals(method) || DELETE.equals(method);
     }
 
     private void forward(HttpExchange exchange, String key, int[] ports, int count, int ack, byte[] body) {
@@ -88,7 +102,7 @@ public class Replication implements AutoCloseable {
                 if (error == null) {
                     result.accept(response.statusCode(), response.body());
                 } else {
-                    result.accept(UNAVAILABLE_CODE, new byte[0]);
+                    result.accept(UNAVAILABLE_CODE, EMPTY_BODY);
                 }
             });
         }
@@ -137,42 +151,64 @@ public class Replication implements AutoCloseable {
 
     private static final class Replies {
 
+        private final ReentrantLock lock = new ReentrantLock();
         private final HttpExchange exchange;
+        private final boolean read;
         private final int total;
         private final int ack;
         private int received;
         private int good;
         private boolean found;
         private boolean done;
-        private byte[] value = new byte[0];
+        private byte[] value = EMPTY_BODY;
 
         private Replies(HttpExchange exchange, int total, int ack) {
             this.exchange = exchange;
+            this.read = GET.equals(exchange.getRequestMethod());
             this.total = total;
             this.ack = ack;
         }
 
-        private synchronized void accept(int code, byte[] body) {
-            if (done) {
-                return;
-            }
-            received++;
-            var read = GET.equals(exchange.getRequestMethod());
-            if (read ? code == OK_CODE || code == NOT_FOUND_CODE : code == CREATED_CODE || code == ACCEPTED_CODE) {
-                good++;
-                if (read && code == OK_CODE) {
-                    found = true;
-                    value = body;
+        private void accept(int code, byte[] body) {
+            lock.lock();
+            try {
+                if (done) {
+                    return;
                 }
-            }
-            if (good >= ack) {
-                respond(read ? (found ? OK_CODE : NOT_FOUND_CODE) : successCode());
-            } else if (good + total - received < ack) {
-                respond(UNAVAILABLE_CODE);
+                received++;
+                record(code, body);
+                if (good >= ack) {
+                    respond(successCode());
+                } else if (good + total - received < ack) {
+                    respond(UNAVAILABLE_CODE);
+                }
+            } finally {
+                lock.unlock();
             }
         }
 
+        private void record(int code, byte[] body) {
+            if (!successful(code)) {
+                return;
+            }
+            good++;
+            if (read && code == OK_CODE) {
+                found = true;
+                value = body;
+            }
+        }
+
+        private boolean successful(int code) {
+            if (read) {
+                return code == OK_CODE || code == NOT_FOUND_CODE;
+            }
+            return code == CREATED_CODE || code == ACCEPTED_CODE;
+        }
+
         private int successCode() {
+            if (read) {
+                return found ? OK_CODE : NOT_FOUND_CODE;
+            }
             return PUT.equals(exchange.getRequestMethod()) ? CREATED_CODE : OK_CODE;
         }
 
