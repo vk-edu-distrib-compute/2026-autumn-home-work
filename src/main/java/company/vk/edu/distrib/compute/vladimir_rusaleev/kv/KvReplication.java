@@ -89,6 +89,7 @@ final class KvReplication implements AutoCloseable {
         int remaining = count;
         Reply found = new Reply(Reply.NOT_FOUND);
         long deadline = System.nanoTime() + WAIT_NANOS;
+        Reply successReply = new Reply(coordinatorStatus(method));
 
         try {
             while (remaining > 0) {
@@ -105,9 +106,7 @@ final class KvReplication implements AutoCloseable {
                 }
 
                 if (successes >= ack) {
-                    return GET_METHOD.equals(method)
-                        ? found
-                        : new Reply(coordinatorStatus(method));
+                    return GET_METHOD.equals(method) ? found : successReply;
                 }
 
                 if (successes + remaining < ack) {

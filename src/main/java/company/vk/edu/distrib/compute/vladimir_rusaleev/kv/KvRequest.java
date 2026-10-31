@@ -7,6 +7,7 @@ import java.util.stream.IntStream;
 
 record KvRequest(String key, int ack, int[] replicas, boolean configured) {
     private static final int MAX_PORT = 65535;
+    private static final int PARAMETER_PARTS = 2;
 
     static KvRequest parse(String query, int localPort) {
         String key = parameter(query, "id", "");
@@ -75,8 +76,8 @@ record KvRequest(String key, int ack, int[] replicas, boolean configured) {
         boolean found = false;
 
         for (String part : query.split("&", -1)) {
-            String[] pair = part.split("=", 2);
-            if (pair.length != 2) {
+            String[] pair = part.split("=", PARAMETER_PARTS);
+            if (pair.length != PARAMETER_PARTS) {
                 throw new IllegalArgumentException("Missing parameter value");
             }
 
