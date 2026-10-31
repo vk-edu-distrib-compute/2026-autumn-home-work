@@ -7,8 +7,10 @@ import java.nio.file.Path;
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.kv.KVService;
 import company.vk.edu.distrib.compute.kv.KVServiceTest;
+import company.vk.edu.distrib.compute.kv.ReplicatedKVServiceTest;
 
 @KVServiceTest
+@ReplicatedKVServiceTest
 public class KVServiceFactory extends AbstractHttpServiceFactory<KVService> {
 
     private static final String STORAGE_DIR = "KV_STORAGE_DIR";

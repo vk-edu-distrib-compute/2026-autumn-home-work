@@ -53,6 +53,7 @@ public class KVServiceImpl implements KVService {
     private final int port;
     private final Dao<byte[]> dao;
     private final int threads;
+    private final Replication replication;
 
     @Nullable
     private HttpServer server;
@@ -66,6 +67,7 @@ public class KVServiceImpl implements KVService {
         this.port = port;
         this.dao = dao;
         this.threads = threads;
+        this.replication = new Replication(port);
     }
 
     @Override
@@ -99,6 +101,7 @@ public class KVServiceImpl implements KVService {
             workers.shutdown();
         }
         stopped = true;
+        replication.close();
         try {
             dao.close();
         } catch (IOException e) {
@@ -114,6 +117,9 @@ public class KVServiceImpl implements KVService {
         }
         if (key.isEmpty()) {
             reply(exchange, BAD_REQUEST_CODE);
+            return;
+        }
+        if (replication.handle(exchange, key)) {
             return;
         }
         switch (exchange.getRequestMethod()) {

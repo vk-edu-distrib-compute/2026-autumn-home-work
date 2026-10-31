@@ -17,17 +17,12 @@ public class ClusterDao implements Dao<String> {
     private static final int BYTE_MASK = 0xff;
 
     private final List<RemoteDao> nodes;
-    private final byte[][] nodeIds;
 
     public ClusterDao(int... ports) {
         if (ports.length == 0) {
             throw new IllegalArgumentException("Cluster needs at least one node");
         }
         this.nodes = Arrays.stream(ports).mapToObj(RemoteDao::new).toList();
-        this.nodeIds = new byte[ports.length][];
-        for (int i = 0; i < ports.length; i++) {
-            nodeIds[i] = ("#" + i).getBytes(StandardCharsets.UTF_8);
-        }
     }
 
     @Override
@@ -51,17 +46,21 @@ public class ClusterDao implements Dao<String> {
     }
 
     private RemoteDao ownerOf(String key) {
+        return nodes.get(ownerIndex(key, nodes.size()));
+    }
+
+    static int ownerIndex(String key, int size) {
         var keyHash = feed(FNV_OFFSET, key.getBytes(StandardCharsets.UTF_8));
         var best = 0;
         var bestScore = Long.MIN_VALUE;
-        for (int i = 0; i < nodeIds.length; i++) {
-            var score = mix(feed(keyHash, nodeIds[i]));
+        for (int i = 0; i < size; i++) {
+            var score = mix(feed(keyHash, ("#" + i).getBytes(StandardCharsets.UTF_8)));
             if (score > bestScore) {
                 bestScore = score;
                 best = i;
             }
         }
-        return nodes.get(best);
+        return best;
     }
 
     private static long feed(long hash, byte[] bytes) {
