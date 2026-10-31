@@ -28,6 +28,7 @@ final class KvServiceImpl implements KVService {
     private final Dao<byte[]> data;
     private HttpServer server;
     private ExecutorService executor;
+    private KvReplication replication;
 
     KvServiceImpl(int port, int threads) throws IOException {
         if (threads < SINGLE_THREAD) {
@@ -44,6 +45,7 @@ final class KvServiceImpl implements KVService {
     public void start() {
         try {
             server = HttpServer.create(new InetSocketAddress("localhost", port), 0);
+            replication = new KvReplication(port);
             server.createContext("/", this::handle);
             if (threads > SINGLE_THREAD) {
                 executor = Executors.newFixedThreadPool(threads);
@@ -63,6 +65,9 @@ final class KvServiceImpl implements KVService {
         if (executor != null) {
             executor.close();
         }
+        if (replication != null) {
+            replication.close();
+        }
         try {
             data.close();
         } catch (IOException exception) {
@@ -71,6 +76,22 @@ final class KvServiceImpl implements KVService {
     }
 
     private void handle(HttpExchange exchange) throws IOException {
+        try {
+            if (ENTITY_PATH.equals(exchange.getRequestURI().getPath()) && replication.handle(exchange)) {
+                return;
+            }
+        } catch (IllegalArgumentException exception) {
+            try (exchange) {
+                respond(exchange, 400, EMPTY_BODY);
+            }
+            return;
+        } catch (IOException exception) {
+            try (exchange) {
+                respond(exchange, 503, EMPTY_BODY);
+            }
+            return;
+        }
+
         try (exchange) {
             try {
                 route(exchange);
@@ -136,7 +157,7 @@ final class KvServiceImpl implements KVService {
         return key;
     }
 
-    private static void respond(HttpExchange exchange, int status, byte[] body) throws IOException {
+    static void respond(HttpExchange exchange, int status, byte[] body) throws IOException {
         exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
         exchange.sendResponseHeaders(status, body.length == 0 ? -1 : body.length);
         if (body.length > 0) {

@@ -44,6 +44,10 @@ final class ClusterLinksDao implements Dao<String> {
     }
 
     private RemoteLinksDao nodeFor(String key) {
+        return nodes[ownerIndex(key, ports)];
+    }
+
+    static int ownerIndex(String key, int... ports) {
         if (key == null || key.isEmpty()) {
             throw new IllegalArgumentException("Empty key");
         }
@@ -63,7 +67,7 @@ final class ClusterLinksDao implements Dao<String> {
             }
         }
 
-        return nodes[selected];
+        return selected;
     }
 
     private static MessageDigest newDigest() {
