@@ -23,8 +23,7 @@ public class HttpServiceFactoryImpl extends AbstractHttpServiceFactory<UrlShorte
             new UrlShortenerHandler(
                 new PersistentDao(directory.resolve("links")),
                 new PersistentDao(directory.resolve("users")),
-                new SecureRandom(),
-                port
+                new SecureRandom()
             )
         );
     }
