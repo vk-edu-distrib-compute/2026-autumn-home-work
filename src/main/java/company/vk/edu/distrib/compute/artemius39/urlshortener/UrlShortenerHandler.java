@@ -8,7 +8,9 @@ import java.util.stream.IntStream;
 
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
+import org.jspecify.annotations.NullMarked;
 
+@NullMarked
 public class UrlShortenerHandler {
     private static final String ALPHABET = IntStream.concat(
             IntStream.concat(
@@ -26,19 +28,17 @@ public class UrlShortenerHandler {
     private Dao<String> linkDao;
     private final Dao<String> authDao;
     private final SecureRandom random;
-    private final int port;
 
-    public UrlShortenerHandler(Dao<String> linkDao, Dao<String> authDao, SecureRandom random, int port) {
+    public UrlShortenerHandler(Dao<String> linkDao, Dao<String> authDao, SecureRandom random) {
         this.linkDao = linkDao;
         this.authDao = authDao;
         this.random = random;
-        this.port = port;
     }
 
     public void registerUser(HttpExchange exchange) throws IOException {
         String requestString = HttpUtils.getRequestBodyAsString(exchange);
         String[] split = requestString.split(":");
-        if (split.length != AUTH_FIELD_COUNT) {
+        if (split.length != HttpUtils.AUTH_FIELD_COUNT) {
             HttpUtils.unprocessableEntity(exchange);
             return;
         }
@@ -80,7 +80,7 @@ public class UrlShortenerHandler {
         }
         String shortLink = generateShortUrl();
         linkDao.upsert(shortLink, longLink);
-        String fullLink = getFullLink(shortLink);
+        String fullLink = getFullLink(exchange, shortLink);
         HttpUtils.sendResponse(exchange, 201, fullLink);
     }
 
@@ -135,8 +135,12 @@ public class UrlShortenerHandler {
         }
     }
 
-    private String getFullLink(String shortLink) {
-        return "http://%s:%d/%s".formatted(HOSTNAME, port, shortLink);
+    private String getFullLink(HttpExchange exchange, String shortLink) {
+        return "http://%s:%d/%s".formatted(
+            exchange.getLocalAddress().getHostString(),
+            exchange.getLocalAddress().getPort(),
+            shortLink
+        );
     }
 
     private boolean checkAuth(HttpExchange httpExchange) throws IOException {
