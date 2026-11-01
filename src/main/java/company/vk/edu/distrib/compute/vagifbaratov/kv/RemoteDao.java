@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-/** UTF-8 adapter for the shortener's string values over the binary KV protocol. */
+
 public final class RemoteDao implements Dao<String> {
     private final HttpClient client = HttpClient.newHttpClient();
     private final String host;
