@@ -12,10 +12,15 @@ import java.io.IOException;
 import java.util.Random;
 import java.util.PrimitiveIterator;
 import java.util.Base64;
+import java.util.NoSuchElementException;
 
 class HandlerImpl implements HttpHandler {
     static final int ID_LENGTH = 10;
     static final String ALPHA_NUMERIC_PATTERN = "[a-zA-Z0-9]*";
+    static final String GET = "GET";
+    static final String POST = "POST";
+    static final String PUT = "PUT";
+    static final String DELETE = "DELETE";
     static final int HTTP_OK = 200;
     static final int HTTP_CREATED = 201;
     static final int HTTP_ACCEPTED = 202;
@@ -48,22 +53,26 @@ class HandlerImpl implements HttpHandler {
             sendResponse(exchange, HTTP_UNAUTHORIZED);
             return;
         }
-        switch (method) {
-        case "GET":
-            handleGet(exchange, path);
-            break;
-        case "POST":
-            handlePost(exchange, path);
-            break;
-        case "PUT":
-            handlePut(exchange, path);
-            break;
-        case "DELETE":
-            handleDelete(exchange, path);
-            break;
-        default:
-            sendResponse(exchange, HTTP_UNPROCESSABLE_CONTENT);
-            break;
+        try {
+            switch (method) {
+            case GET:
+                handleGet(exchange, path);
+                break;
+            case POST:
+                handlePost(exchange, path);
+                break;
+            case PUT:
+                handlePut(exchange, path);
+                break;
+            case DELETE:
+                handleDelete(exchange, path);
+                break;
+            default:
+                sendResponse(exchange, HTTP_UNPROCESSABLE_CONTENT);
+                break;
+            }
+        } catch (NoSuchElementException e) {
+            sendResponse(exchange, HTTP_NOT_FOUND);
         }
     }
 
@@ -111,10 +120,6 @@ class HandlerImpl implements HttpHandler {
                 return;
             }
             String link = dao.get(id);
-            if (link == null) {
-                sendResponse(exchange, HTTP_NOT_FOUND);
-                return;
-            }
             sendResponse(exchange, HTTP_OK, link);
             return;
         }
@@ -124,10 +129,6 @@ class HandlerImpl implements HttpHandler {
             return;
         }
         String link = dao.get(id);
-        if (link == null) {
-            sendResponse(exchange, HTTP_NOT_FOUND);
-            return;
-        }
         exchange.getResponseHeaders().add("Location", link);
         sendResponse(exchange, HTTP_MOVED_PERMANENTLY);
     }
@@ -167,11 +168,7 @@ class HandlerImpl implements HttpHandler {
                 sendResponse(exchange, HTTP_UNPROCESSABLE_CONTENT);
                 return;
             }
-            String link = dao.get(id);
-            if (link == null) {
-                sendResponse(exchange, HTTP_NOT_FOUND);
-                return;
-            }
+            dao.get(id);
             try (InputStream is = exchange.getRequestBody()) {
                 String newLink = new String(is.readAllBytes());
                 if (!isValidURL(newLink)) {
