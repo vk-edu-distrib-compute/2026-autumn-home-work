@@ -12,7 +12,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 
 public class BasicAuthHandler implements HttpHandler {
-    private static final String BASIC_PREFIX = "Basic ";
+    private static final String BASIC_PREFIX = "basic ";
     private static final int CREDENTIALS_LENGTH = 2;
     private final HttpHandler delegate;
     private final Dao<String> credentialsDao;
@@ -26,25 +26,33 @@ public class BasicAuthHandler implements HttpHandler {
     public void handle(HttpExchange exchange) throws IOException {
         final var authorization = exchange.getRequestHeaders().getFirst("Authorization");
 
-        if (authorization == null || !authorization.startsWith(BASIC_PREFIX)) {
+        if (authorization == null || !authorization.toLowerCase().startsWith(BASIC_PREFIX)) {
             throw new AuthenticationException("Unauthorized");
         }
 
         final var encoded = authorization.substring(BASIC_PREFIX.length());
-        final var credentials = new String(
-                Base64.getDecoder().decode(encoded),
-                StandardCharsets.UTF_8
-        ).split(":", 2);
+        final var credentials = decode(encoded);
 
-        if (credentials.length != CREDENTIALS_LENGTH) {
+        if (credentials.length != CREDENTIALS_LENGTH || credentials[0].isEmpty()) {
             throw new AuthenticationException("Unauthorized");
         }
-
         if (!authenticate(credentials[0], credentials[1])) {
             throw new AuthenticationException("Unauthorized");
         }
 
         delegate.handle(exchange);
+    }
+
+    private String[] decode(String encoded) throws AuthenticationException {
+
+        try {
+            return new String(
+                    Base64.getDecoder().decode(encoded),
+                    StandardCharsets.UTF_8
+            ).split(":", 2);
+        } catch (IllegalArgumentException ex) {
+            throw new AuthenticationException("Unauthorized", ex);
+        }
     }
 
     private boolean authenticate(String user, String password) throws IOException {
