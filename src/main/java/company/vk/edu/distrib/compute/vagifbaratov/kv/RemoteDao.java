@@ -12,7 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-
 public final class RemoteDao implements Dao<String> {
     private final HttpClient client = HttpClient.newHttpClient();
     private final String host;
