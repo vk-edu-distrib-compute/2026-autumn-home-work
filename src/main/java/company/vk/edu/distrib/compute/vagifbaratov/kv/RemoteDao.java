@@ -12,13 +12,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-/** UTF-8 adapter for the shortener's string values over the binary KV protocol. */
 public final class RemoteDao implements Dao<String> {
     private final HttpClient client = HttpClient.newHttpClient();
     private final String host;
     private final int port;
 
     private static final int NOT_FOUND = 404;
+    private static final String GET = "GET";
 
     public RemoteDao(String host, int port) {
         this.host = host;
@@ -63,7 +63,7 @@ public final class RemoteDao implements Dao<String> {
 
         int status = response.statusCode();
 
-        if (status == NOT_FOUND && "GET".equals(method)) {
+        if (status == NOT_FOUND && GET.equals(method)) {
             throw new NoSuchElementException("Missing key: " + key);
         }
 
@@ -97,4 +97,3 @@ public final class RemoteDao implements Dao<String> {
         return URI.create(path + encodedKey);
     }
 }
-
