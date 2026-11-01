@@ -5,6 +5,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.jspecify.annotations.Nullable;
+
 final class GetAckLatch {
     private static final byte[] EMPTY_VALUE = new byte[0];
 
@@ -23,36 +25,49 @@ final class GetAckLatch {
     }
 
     void record(ReplicaClient.GetResult result) {
-        Outcome snapshot = Outcome.UNAVAILABLE;
-        boolean finish = false;
+        @Nullable Outcome snapshot;
         lock.lock();
         try {
             finished++;
-            if (result.answered()) {
-                answers++;
-                if (result.found() && !found) {
-                    found = true;
-                    value = result.value();
-                }
-            }
-            if (done.isDone()) {
-                return;
-            }
-            boolean enough = answers >= required;
-            boolean impossible = answers + (total - finished) < required;
-            if (enough) {
-                snapshot = found ? Outcome.FOUND : Outcome.MISSING;
-                finish = true;
-            } else if (impossible) {
-                snapshot = Outcome.UNAVAILABLE;
-                finish = true;
-            }
+            remember(result);
+            snapshot = decision();
         } finally {
             lock.unlock();
         }
-        if (finish) {
+        if (snapshot != null) {
             done.complete(snapshot);
         }
+    }
+
+    private void remember(ReplicaClient.GetResult result) {
+        if (!result.answered()) {
+            return;
+        }
+        answers++;
+        if (result.found() && !found) {
+            found = true;
+            value = result.value();
+        }
+    }
+
+    private @Nullable Outcome decision() {
+        if (done.isDone()) {
+            return null;
+        }
+        if (answers >= required) {
+            return foundOutcome();
+        }
+        if (answers + (total - finished) < required) {
+            return Outcome.UNAVAILABLE;
+        }
+        return null;
+    }
+
+    private Outcome foundOutcome() {
+        if (found) {
+            return Outcome.FOUND;
+        }
+        return Outcome.MISSING;
     }
 
     Outcome await() {

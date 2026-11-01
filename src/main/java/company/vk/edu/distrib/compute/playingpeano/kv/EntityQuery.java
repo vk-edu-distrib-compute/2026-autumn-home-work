@@ -37,24 +37,50 @@ final class EntityQuery {
         if (rawQuery == null) {
             throw new IllegalArgumentException("Missing id");
         }
-        @Nullable String key = null;
-        @Nullable String ack = null;
+        return queryFor(collect(rawQuery));
+    }
+
+    private static Fields collect(String rawQuery) {
+        Fields fields = new Fields();
         for (String parameter : rawQuery.split("&")) {
-            int separator = parameter.indexOf(PARAMETER_SEPARATOR);
-            if (separator == PARAMETER_SEPARATOR_NOT_FOUND) {
-                continue;
-            }
-            String name = parameter.substring(0, separator);
-            String value = URLDecoder.decode(parameter.substring(separator + 1), StandardCharsets.UTF_8);
-            if (key == null && ID_PARAMETER.equals(name)) {
-                key = value;
-            } else if (ack == null && ACK_PARAMETER.equals(name)) {
-                ack = value;
+            @Nullable Assignment assignment = assignment(parameter);
+            if (assignment != null) {
+                fields.accept(assignment);
             }
         }
-        if (key == null || key.isEmpty()) {
+        return fields;
+    }
+
+    private static @Nullable Assignment assignment(String parameter) {
+        int separator = parameter.indexOf(PARAMETER_SEPARATOR);
+        if (separator == PARAMETER_SEPARATOR_NOT_FOUND) {
+            return null;
+        }
+        String name = parameter.substring(0, separator);
+        String value = URLDecoder.decode(parameter.substring(separator + 1), StandardCharsets.UTF_8);
+        return new Assignment(name, value);
+    }
+
+    private static EntityQuery queryFor(Fields fields) {
+        if (fields.key == null || fields.key.isEmpty()) {
             throw new IllegalArgumentException("Missing id");
         }
-        return new EntityQuery(key, ack);
+        return new EntityQuery(fields.key, fields.ack);
+    }
+
+    private record Assignment(String name, String value) {
+    }
+
+    private static final class Fields {
+        private @Nullable String key;
+        private @Nullable String ack;
+
+        void accept(Assignment assignment) {
+            if (key == null && ID_PARAMETER.equals(assignment.name)) {
+                key = assignment.value;
+            } else if (ack == null && ACK_PARAMETER.equals(assignment.name)) {
+                ack = assignment.value;
+            }
+        }
     }
 }
