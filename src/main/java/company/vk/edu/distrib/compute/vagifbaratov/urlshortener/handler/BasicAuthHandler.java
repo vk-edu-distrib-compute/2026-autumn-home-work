@@ -8,11 +8,13 @@ import javax.security.sasl.AuthenticationException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Locale;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
 public class BasicAuthHandler implements HttpHandler {
     private static final String BASIC_PREFIX = "basic ";
+    private static final String UNAUTHORIZED = "Unauthorized";
     private static final int CREDENTIALS_LENGTH = 2;
     private final HttpHandler delegate;
     private final Dao<String> credentialsDao;
@@ -26,18 +28,19 @@ public class BasicAuthHandler implements HttpHandler {
     public void handle(HttpExchange exchange) throws IOException {
         final var authorization = exchange.getRequestHeaders().getFirst("Authorization");
 
-        if (authorization == null || !authorization.toLowerCase().startsWith(BASIC_PREFIX)) {
-            throw new AuthenticationException("Unauthorized");
+        if (authorization == null
+                || !authorization.toLowerCase(Locale.ROOT).startsWith(BASIC_PREFIX)) {
+            throw new AuthenticationException(UNAUTHORIZED);
         }
 
         final var encoded = authorization.substring(BASIC_PREFIX.length());
         final var credentials = decode(encoded);
 
         if (credentials.length != CREDENTIALS_LENGTH || credentials[0].isEmpty()) {
-            throw new AuthenticationException("Unauthorized");
+            throw new AuthenticationException(UNAUTHORIZED);
         }
         if (!authenticate(credentials[0], credentials[1])) {
-            throw new AuthenticationException("Unauthorized");
+            throw new AuthenticationException(UNAUTHORIZED);
         }
 
         delegate.handle(exchange);
@@ -51,7 +54,7 @@ public class BasicAuthHandler implements HttpHandler {
                     StandardCharsets.UTF_8
             ).split(":", 2);
         } catch (IllegalArgumentException ex) {
-            throw new AuthenticationException("Unauthorized", ex);
+            throw new AuthenticationException(UNAUTHORIZED, ex);
         }
     }
 
