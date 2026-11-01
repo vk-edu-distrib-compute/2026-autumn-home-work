@@ -54,6 +54,9 @@ public class Router implements HttpHandler {
         } catch (IllegalArgumentException e) {
             exchange.sendResponseHeaders(400, -1);
             exchange.close();
+        } catch (IOException e) {
+            exchange.sendResponseHeaders(500, -1);
+            exchange.close();
         }
     }
 
