@@ -23,9 +23,9 @@ public class UrlShortenerHandler {
     private static final int SHORT_URL_LENGTH = 10;
     private static final String ROOT_URI = "/";
 
-    private final Dao<String> linkDao;
     private final Dao<String> authDao;
     private final SecureRandom random;
+    private Dao<String> linkDao;
 
     public UrlShortenerHandler(Dao<String> linkDao, Dao<String> authDao, SecureRandom random) {
         this.linkDao = linkDao;
