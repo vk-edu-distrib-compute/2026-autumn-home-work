@@ -22,7 +22,7 @@ public class UrlShortenerHttpServiceFactory extends AbstractHttpServiceFactory<U
         ));
         Path directory = dataRoot.resolve(Integer.toString(port));
         return new UrlShortenerController(
-            new InetSocketAddress("localhost", port),
+            port,
             new UrlShortenerHandler(
                 new PersistentDao(directory.resolve("links")),
                 new PersistentDao(directory.resolve("users")),
