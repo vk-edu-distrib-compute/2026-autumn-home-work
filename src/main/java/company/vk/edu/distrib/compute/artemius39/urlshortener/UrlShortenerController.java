@@ -3,10 +3,8 @@ package company.vk.edu.distrib.compute.artemius39.urlshortener;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
-import java.util.Objects;
 
 import com.sun.net.httpserver.HttpServer;
-import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 
 public class UrlShortenerController implements UrlShortenerService {
@@ -42,7 +40,7 @@ public class UrlShortenerController implements UrlShortenerService {
         server.createContext(
             "/v0/status", exchange -> {
                 try (exchange) {
-                    if ("GET".equals(exchange.getRequestMethod())) {
+                    if (HttpUtils.Methods.GET.equals(exchange.getRequestMethod())) {
                         handler.getStatus(exchange);
                     } else {
                         HttpUtils.methodNotAllowed(exchange);
@@ -57,9 +55,9 @@ public class UrlShortenerController implements UrlShortenerService {
             LINKS_URI, exchange -> {
                 try (exchange) {
                     switch (exchange.getRequestMethod()) {
-                        case "GET" -> handler.getLink(exchange);
-                        case "PUT" -> handler.changeLink(exchange);
-                        case "DELETE" -> handler.deleteLink(exchange);
+                        case HttpUtils.Methods.GET -> handler.getLink(exchange);
+                        case HttpUtils.Methods.PUT -> handler.changeLink(exchange);
+                        case HttpUtils.Methods.DELETE -> handler.deleteLink(exchange);
                         default -> HttpUtils.methodNotAllowed(exchange);
                     }
                 }
@@ -68,7 +66,7 @@ public class UrlShortenerController implements UrlShortenerService {
         server.createContext(
             "/v0/links", exchange -> {
                 try (exchange) {
-                    if ("POST".equals(exchange.getRequestMethod())) {
+                    if (HttpUtils.Methods.POST.equals(exchange.getRequestMethod())) {
                         handler.createLink(exchange);
                     } else {
                         HttpUtils.methodNotAllowed(exchange);
@@ -79,7 +77,7 @@ public class UrlShortenerController implements UrlShortenerService {
         server.createContext(
             ROOT_URI, exchange -> {
                 try (exchange) {
-                    if ("GET".equals(exchange.getRequestMethod())) {
+                    if (HttpUtils.Methods.GET.equals(exchange.getRequestMethod())) {
                         handler.redirectLink(exchange);
                     } else {
                         HttpUtils.methodNotAllowed(exchange);
@@ -93,7 +91,7 @@ public class UrlShortenerController implements UrlShortenerService {
         server.createContext(
             "/internal/users", exchange -> {
                 try (exchange) {
-                    if ("POST".equals(exchange.getRequestMethod())) {
+                    if (HttpUtils.Methods.POST.equals(exchange.getRequestMethod())) {
                         handler.registerUser(exchange);
                     } else {
                         HttpUtils.methodNotAllowed(exchange);

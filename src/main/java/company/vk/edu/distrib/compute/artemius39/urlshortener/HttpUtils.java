@@ -13,7 +13,7 @@ import com.sun.net.httpserver.HttpExchange;
 
 public final class HttpUtils {
     private static final String BASIC_AUTH_PREFIX = "Basic ";
-    private static final int AUTH_FIELD_COUNT = 2;
+    public static final int AUTH_FIELD_COUNT = 2;
 
     private HttpUtils() {
         // utility class
@@ -77,6 +77,17 @@ public final class HttpUtils {
             return new Credentials(username, password);
         } catch (IllegalArgumentException | NoSuchElementException e) {
             return null;
+        }
+    }
+
+    public static final class Methods {
+        public static final String GET = "GET";
+        public static final String POST = "POST";
+        public static final String PUT = "PUT";
+        public static final String DELETE = "DELETE";
+
+        private Methods() {
+            // utility class
         }
     }
 }
