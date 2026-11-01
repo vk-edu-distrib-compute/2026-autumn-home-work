@@ -1,6 +1,7 @@
 package company.vk.edu.distrib.compute.sh4rrkyyyy.kv;
 
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.HttpStatus;
 
 import java.io.IOException;
 import java.net.URI;
@@ -14,10 +15,6 @@ import java.util.NoSuchElementException;
 public class Sh4rkyRemoteDao implements Dao<String> {
     private final HttpClient client;
     private final String url;
-    private static final int HTTP_OK = 200;
-    private static final int HTTP_CREATED = 201;
-    private static final int HTTP_ACCEPTED = 202;
-    private static final int HTTP_NOT_FOUND = 404;
 
     Sh4rkyRemoteDao(int port, HttpClient client) {
         this.client = client;
@@ -31,10 +28,10 @@ public class Sh4rkyRemoteDao implements Dao<String> {
     @Override
     public String get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
         HttpResponse<byte[]> rsp = send(buildReq(key).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
-        if (rsp.statusCode() == HTTP_NOT_FOUND) {
+        if (rsp.statusCode() == HttpStatus.NOT_FOUND) {
             throw new NoSuchElementException("no value for key: " + key);
         }
-        if (rsp.statusCode() != HTTP_OK) {
+        if (rsp.statusCode() != HttpStatus.OK) {
             throw new IOException("unexpected response: " + rsp.statusCode());
         }
         return new String(rsp.body(), StandardCharsets.UTF_8);
@@ -45,7 +42,7 @@ public class Sh4rkyRemoteDao implements Dao<String> {
         HttpResponse<Void> rsp = send(buildReq(key)
                         .PUT(HttpRequest.BodyPublishers.ofString(value, StandardCharsets.UTF_8)).build(),
                 HttpResponse.BodyHandlers.discarding());
-        if (rsp.statusCode() != HTTP_CREATED) {
+        if (rsp.statusCode() != HttpStatus.CREATED) {
             throw new IOException("unexpected response: " + rsp.statusCode());
         }
     }
@@ -53,7 +50,7 @@ public class Sh4rkyRemoteDao implements Dao<String> {
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
         HttpResponse<Void> rsp = send(buildReq(key).DELETE().build(), HttpResponse.BodyHandlers.discarding());
-        if (rsp.statusCode() != HTTP_ACCEPTED) {
+        if (rsp.statusCode() != HttpStatus.ACCEPTED) {
             throw new IOException("unexpected response: " + rsp.statusCode());
         }
     }

@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.sh4rrkyyyy.common.ErrorHandler;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.HttpStatus;
 import company.vk.edu.distrib.compute.sh4rrkyyyy.common.HttpUtils;
 import company.vk.edu.distrib.compute.sh4rrkyyyy.common.PersistentDao;
 import company.vk.edu.distrib.compute.sh4rrkyyyy.common.Serializers;

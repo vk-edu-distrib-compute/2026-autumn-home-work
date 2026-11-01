@@ -44,6 +44,10 @@ public class Sh4rkyClusterDao implements Dao<String> {
     }
 
     private Dao<String> getNode(String key) {
+        return nodes[getNodeIndex(key, ports)];
+    }
+
+    static int getNodeIndex(String key, int... ports) {
         int hashMax = Integer.MIN_VALUE;
         int idx = 0;
         for (int i = 0; i < ports.length; ++i) {
@@ -53,7 +57,7 @@ public class Sh4rkyClusterDao implements Dao<String> {
                 idx = i;
             }
         }
-        return nodes[idx];
+        return idx;
     }
 
     private static int hash(String key, int port) {
