@@ -1,9 +1,9 @@
 package company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.middlewares;
 
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Handler;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.HttpStatus;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Middleware;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Response;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Handler;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.HttpStatus;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Middleware;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Response;
 import company.vk.edu.distrib.compute.iizhukov.urlshortener.db.StorageException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
