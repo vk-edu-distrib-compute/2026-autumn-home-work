@@ -4,10 +4,10 @@ import java.io.IOException;
 
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
-import company.vk.edu.distrib.compute.miiishenka.urlshortener.exception.HttpStatusException;
-import company.vk.edu.distrib.compute.miiishenka.urlshortener.exception.NotFoundException;
+import company.vk.edu.distrib.compute.miiishenka.http.exception.HttpStatusException;
+import company.vk.edu.distrib.compute.miiishenka.http.exception.NotFoundException;
 
-public class RedirectController extends BaseController {
+public class RedirectController extends BaseUrlShortenerController {
     private final Dao<String> linksDao;
 
     public RedirectController(Dao<String> linksDao) {
