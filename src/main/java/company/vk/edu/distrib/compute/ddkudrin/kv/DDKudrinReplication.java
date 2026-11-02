@@ -19,6 +19,7 @@ import company.vk.edu.distrib.compute.Dao;
 
 public class DDKudrinReplication {
     private static final String GET = "GET";
+    private static final String PUT = "PUT";
     private static final String ENTITY_PATH = "/v0/entity";
     private static final String INTERNAL_HEADER = "X-DDKudrin-Internal";
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
@@ -38,11 +39,11 @@ public class DDKudrinReplication {
         }
         int ack = DDKudrinEntityHandler.readAck(query, factor);
         String method = exchange.getRequestMethod();
-        if (!Objects.equals(method, GET) && !Objects.equals(method, "PUT") && !Objects.equals(method, "DELETE")) {
+        if (!Objects.equals(method, GET) && !Objects.equals(method, PUT) && !Objects.equals(method, "DELETE")) {
             exchange.sendResponseHeaders(405, -1);
             return;
         }
-        byte[] body = Objects.equals(method, "PUT") ? exchange.getRequestBody().readAllBytes() : new byte[0];
+        byte[] body = Objects.equals(method, PUT) ? exchange.getRequestBody().readAllBytes() : new byte[0];
         BlockingQueue<ReplicaResponse> responses = new LinkedBlockingQueue<>();
         sendRequests(exchange, key, ports, factor, method, body, responses);
         collectResponses(exchange, method, ack, factor, responses);
@@ -113,7 +114,7 @@ public class DDKudrinReplication {
     private static boolean isSuccessful(String method, int status) {
         return switch (method) {
             case GET -> status == 200 || status == 404;
-            case "PUT" -> status == 201;
+            case PUT -> status == 201;
             case "DELETE" -> status == 202;
             default -> false;
         };
@@ -123,7 +124,7 @@ public class DDKudrinReplication {
         if (Objects.equals(method, GET)) {
             sendGetResult(exchange, value);
         } else {
-            exchange.sendResponseHeaders(Objects.equals(method, "PUT") ? 201 : 200, -1);
+            exchange.sendResponseHeaders(Objects.equals(method, PUT) ? 201 : 200, -1);
         }
     }
 
@@ -144,7 +145,7 @@ public class DDKudrinReplication {
             if (Objects.equals(method, GET)) {
                 return new ReplicaResponse(200, dao.get(key));
             }
-            if (Objects.equals(method, "PUT")) {
+            if (Objects.equals(method, PUT)) {
                 dao.upsert(key, body);
                 return new ReplicaResponse(201, new byte[0]);
             }
