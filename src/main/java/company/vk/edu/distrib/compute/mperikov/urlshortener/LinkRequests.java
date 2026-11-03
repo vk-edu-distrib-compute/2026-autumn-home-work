@@ -9,11 +9,15 @@ import company.vk.edu.distrib.compute.Dao;
 
 final class LinkRequests {
     private final int port;
-    private final Dao<String> links;
+    private Dao<String> links;
 
     LinkRequests(int port, Dao<String> links) {
         this.port = port;
         this.links = links;
+    }
+
+    void use(Dao<String> dao) {
+        links = dao;
     }
 
     void create(HttpExchange exchange) throws IOException {
