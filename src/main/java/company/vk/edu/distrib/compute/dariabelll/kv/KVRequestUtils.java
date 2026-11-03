@@ -1,7 +1,9 @@
 package company.vk.edu.distrib.compute.dariabelll.kv;
 
+import com.sun.net.httpserver.HttpExchange;
 import org.jspecify.annotations.Nullable;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -12,8 +14,13 @@ final class KVRequestUtils {
 
     private static final String ID_QUERY_PARAMETER = "id=";
     private static final String ACK_QUERY_PARAMETER = "ack=";
+    private static final byte[] EMPTY_BODY = new byte[0];
 
     private KVRequestUtils() {
+    }
+
+    static byte[] readValue(HttpExchange exchange, String method) throws IOException {
+        return "PUT".equals(method) ? exchange.getRequestBody().readAllBytes() : EMPTY_BODY;
     }
 
     static @Nullable String extractKey(URI uri) {

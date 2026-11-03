@@ -7,15 +7,14 @@ import java.util.NoSuchElementException;
 
 public class ClusterRemoteDao implements Dao<String> {
 
-    private final int[] ports;
     private final RemoteDao[] remoteDaos;
     private final RendezvousHashing hashing;
 
     public ClusterRemoteDao(int... ports) {
-        this.ports = ports.clone();
-        this.remoteDaos = new RemoteDao[this.ports.length];
-        for (int i = 0; i < this.ports.length; ++i) {
-            remoteDaos[i] = new RemoteDao(this.ports[i]);
+        int[] nodePorts = ports.clone();
+        this.remoteDaos = new RemoteDao[nodePorts.length];
+        for (int i = 0; i < nodePorts.length; ++i) {
+            remoteDaos[i] = new RemoteDao(nodePorts[i]);
         }
         this.hashing = new RendezvousHashing(ports);
     }

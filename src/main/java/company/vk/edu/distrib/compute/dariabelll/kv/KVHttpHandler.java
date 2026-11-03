@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class KVHttpHandler implements HttpHandler {
 
@@ -115,6 +116,14 @@ public class KVHttpHandler implements HttpHandler {
             return;
         }
 
+        handleExternalRequest(exchange, method, key);
+    }
+
+    private void handleExternalRequest(
+            HttpExchange exchange,
+            String method,
+            String key
+    ) throws IOException {
         @Nullable ReplicationConfig config;
         try {
             config = KVRequestUtils.readReplicationConfig();
@@ -142,14 +151,22 @@ public class KVHttpHandler implements HttpHandler {
             return;
         }
 
+        coordinateRequest(exchange, method, key, config, ack);
+    }
+
+    private void coordinateRequest(
+            HttpExchange exchange,
+            String method,
+            String key,
+            ReplicationConfig config,
+            int ack
+    ) throws IOException {
         int[] ports = config.getPorts();
 
         RendezvousHashing hashing = new RendezvousHashing(ports);
-        int[] replicaIndices = hashing.selectPortIndices(key, replicationFactor);
+        int[] replicaIndices = hashing.selectPortIndices(key, config.getReplicationFactor());
 
-        byte[] value = METHOD_PUT.equals(method)
-                ? exchange.getRequestBody().readAllBytes()
-                : EMPTY_BODY;
+        byte[] value = KVRequestUtils.readValue(exchange, method);
 
         List<CompletableFuture<OperationResult>> requests =
                 startReplicaRequests(ports, replicaIndices, method, key, value);
@@ -168,9 +185,7 @@ public class KVHttpHandler implements HttpHandler {
             String method,
             String key
     ) throws IOException {
-        byte[] value = METHOD_PUT.equals(method)
-                ? exchange.getRequestBody().readAllBytes()
-                : EMPTY_BODY;
+        byte[] value = KVRequestUtils.readValue(exchange, method);
 
         OperationResult result = executeLocal(method, key, value);
         sendResult(exchange, result);
@@ -310,6 +325,7 @@ public class KVHttpHandler implements HttpHandler {
         private final int ack;
         private final int allowedFailures;
         private final CompletableFuture<OperationResult> result = new CompletableFuture<>();
+        private final ReentrantLock lock = new ReentrantLock();
         private OperationResult selected = new OperationResult(HTTP_NOT_FOUND, EMPTY_BODY);
         private int successful;
         private int failed;
@@ -320,26 +336,31 @@ public class KVHttpHandler implements HttpHandler {
             allowedFailures = replicaCount - ack;
         }
 
-        private synchronized void accept(OperationResult response) {
-            if (result.isDone()) {
-                return;
-            }
-            if (isSuccessful(response)) {
-                if (response.status() != HTTP_NOT_FOUND) {
-                    selected = response;
+        private void accept(OperationResult response) {
+            lock.lock();
+            try {
+                if (result.isDone()) {
+                    return;
                 }
-                successful++;
-                if (successful >= ack) {
-                    OperationResult responseToClient = METHOD_DELETE.equals(method)
-                            ? new OperationResult(HTTP_OK, EMPTY_BODY)
-                            : selected;
-                    result.complete(responseToClient);
+                if (isSuccessful(response)) {
+                    if (response.status() != HTTP_NOT_FOUND) {
+                        selected = response;
+                    }
+                    successful++;
+                    if (successful >= ack) {
+                        OperationResult responseToClient = METHOD_DELETE.equals(method)
+                                ? new OperationResult(HTTP_OK, EMPTY_BODY)
+                                : selected;
+                        result.complete(responseToClient);
+                    }
+                } else {
+                    failed++;
+                    if (failed > allowedFailures) {
+                        result.complete(new OperationResult(HTTP_SERVICE_UNAVAILABLE, EMPTY_BODY));
+                    }
                 }
-            } else {
-                failed++;
-                if (failed > allowedFailures) {
-                    result.complete(new OperationResult(HTTP_SERVICE_UNAVAILABLE, EMPTY_BODY));
-                }
+            } finally {
+                lock.unlock();
             }
         }
 
