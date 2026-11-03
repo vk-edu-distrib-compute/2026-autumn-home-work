@@ -6,6 +6,7 @@ import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Random;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import com.sun.net.httpserver.HttpHandler;
@@ -24,7 +25,6 @@ import static java.net.HttpURLConnection.HTTP_OK;
 
 public class UrlShortenerServiceImpl extends AbstractService implements UrlShortenerService {
   private static final String ALLOWED_ID_CHARS;
-  private static final int ID_LENGTH = 10;
 
   static {
     final StringBuilder sb = new StringBuilder();
@@ -40,7 +40,10 @@ public class UrlShortenerServiceImpl extends AbstractService implements UrlShort
     ALLOWED_ID_CHARS = sb.toString();
   }
 
+  private static final int ID_LENGTH = 10;
   private static final Pattern ID_PATTERN = Pattern.compile("[" + ALLOWED_ID_CHARS + "]{" + ID_LENGTH + "}");
+
+  private static final Set<String> ALLOWED_SCHEMAS = Set.of("http", "https");
 
   private static final int HTTP_UNPROCESSABLE_CONTENT = 422;
 
@@ -210,7 +213,7 @@ public class UrlShortenerServiceImpl extends AbstractService implements UrlShort
   private static boolean isValidLink(final String link) {
     try {
       final URI uri = new URI(link);
-      return uri.isAbsolute();
+      return uri.isAbsolute() && uri.getScheme() != null && ALLOWED_SCHEMAS.contains(uri.getScheme());
     } catch (final URISyntaxException e) {
       return false;
     }

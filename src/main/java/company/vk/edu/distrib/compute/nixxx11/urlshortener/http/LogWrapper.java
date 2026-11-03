@@ -22,11 +22,7 @@ public class LogWrapper implements SimpleHandler {
     final int requestId = RANDOM.nextInt();
     final String method = request.getRequestMethod();
     final String path = request.getRequestURI().getPath();
-    if (content.isEmpty()) {
-      LOG.info("Got request '{} {}' (id={})", method, path, requestId);
-    } else {
-      LOG.info("Got request '{} {}' with body '{}' (id={})", method, path, content, requestId);
-    }
+    LOG.info("Got request '{} {}' (id={})", method, path, requestId);
     final Response response;
     try {
       response = handler.handle(request, content);
