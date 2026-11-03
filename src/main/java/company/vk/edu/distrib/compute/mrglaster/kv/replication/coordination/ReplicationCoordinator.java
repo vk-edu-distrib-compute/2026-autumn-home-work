@@ -17,6 +17,7 @@ public final class ReplicationCoordinator {
     private final int localPort;
     private final LocalReplicaExecutor localExecutor;
     private final RemoteReplicaClient remoteClient;
+    private static final int ACK_BORDER = 1;
 
     public ReplicationCoordinator(int localPort, Dao<byte[]> localDao) {
         this.localPort = localPort;
@@ -38,7 +39,7 @@ public final class ReplicationCoordinator {
     }
 
     private ReplicaResult executeSingle(int ack, String method, String key, byte[] body) {
-        if (ack > 1) {
+        if (ack > ACK_BORDER) {
             return ReplicaResult.UNAVAILABLE;
         }
         return localExecutor.execute(method, key, body);
