@@ -2,10 +2,12 @@ package company.vk.edu.distrib.compute.cloudyy74.kv;
 
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.kv.KVServiceTest;
+import company.vk.edu.distrib.compute.kv.ReplicatedKVServiceTest;
 
 import java.io.IOException;
 
 @KVServiceTest
+@ReplicatedKVServiceTest
 public class Cloudyy74KVServiceFactory extends AbstractHttpServiceFactory<Cloudyy74KVService> {
     @Override
     protected Cloudyy74KVService doCreate(int port) throws IOException {
