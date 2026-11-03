@@ -7,6 +7,7 @@ import org.jspecify.annotations.Nullable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
+import java.net.http.HttpClient;
 import java.util.concurrent.ExecutorService;
 
 public class KVServiceImpl implements KVService {
@@ -14,6 +15,7 @@ public class KVServiceImpl implements KVService {
     private final HttpServer server;
     private final JournaledDao dao;
     private final @Nullable ExecutorService executor;
+    private final HttpClient client;
 
     public KVServiceImpl(
             int port,
@@ -22,9 +24,10 @@ public class KVServiceImpl implements KVService {
         this.dao = dao;
         this.executor = executor;
         server = HttpServer.create(new InetSocketAddress(port), 0);
+        client = HttpClient.newHttpClient();
         server.createContext(
                 "/",
-                new KVHttpHandler(dao)
+                new KVHttpHandler(dao, port, client)
         );
         if (executor != null) {
             server.setExecutor(executor);
@@ -38,7 +41,7 @@ public class KVServiceImpl implements KVService {
 
     @Override
     public void stop() {
-        try (dao; executor) {
+        try (dao; executor; client) {
             server.stop(1);
         } catch (IOException e) {
             throw new UncheckedIOException(e);

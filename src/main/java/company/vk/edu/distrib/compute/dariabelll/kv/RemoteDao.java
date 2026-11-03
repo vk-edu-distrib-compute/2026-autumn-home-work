@@ -70,7 +70,7 @@ public class RemoteDao implements Dao<String> {
                 .DELETE()
                 .build();
         int status = send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
-        if (status != HTTP_ACCEPTED) {
+        if (status != HTTP_ACCEPTED && status != HTTP_OK) {
             throw new IOException("DELETE " + key + ": unexpected status " + status);
         }
     }
