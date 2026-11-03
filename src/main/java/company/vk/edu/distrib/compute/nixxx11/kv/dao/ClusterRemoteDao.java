@@ -23,7 +23,7 @@ public class ClusterRemoteDao implements Dao<String> {
         nodes.add(new RemoteDao(uri));
       }
     } catch (final RuntimeException e) {
-      close();
+      closeNodes();
       throw e;
     }
   }
@@ -76,6 +76,10 @@ public class ClusterRemoteDao implements Dao<String> {
 
   @Override
   public void close() {
+    closeNodes();
+  }
+
+  private void closeNodes() {
     for (final RemoteDao dao : nodes) {
       dao.close();
     }
