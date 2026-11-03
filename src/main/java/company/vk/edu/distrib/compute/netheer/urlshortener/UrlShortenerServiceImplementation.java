@@ -1,3 +1,4 @@
+
 package company.vk.edu.distrib.compute.netheer.urlshortener;
 
 import com.sun.net.httpserver.HttpServer;
@@ -7,21 +8,30 @@ import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class UrlShortenerServiceImplementation implements UrlShortenerService {
     private static final int STOP_DELAY_SECONDS = 1;
 
-    private final Dao<String> linksDao;
+    private Dao<String> linksDao;
     private final Dao<String> usersDao;
     private final HttpServer server;
+    private final UrlShortenerHandlers handlers;
+    private final Lock lifecycleLock = new ReentrantLock();
 
-    public UrlShortenerServiceImplementation(int port, Dao<String> linksDao, Dao<String> usersDao)
-            throws IOException {
+    private boolean lifecycleStarted;
+
+    public UrlShortenerServiceImplementation(
+            int port,
+            Dao<String> linksDao,
+            Dao<String> usersDao
+    ) throws IOException {
         this.linksDao = linksDao;
         this.usersDao = usersDao;
 
         UrlShortenerAuth auth = new UrlShortenerAuth(usersDao);
-        UrlShortenerHandlers handlers = new UrlShortenerHandlers(port, linksDao, auth);
+        this.handlers = new UrlShortenerHandlers(port, linksDao, auth);
 
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/v0/status", handlers::handleStatus);
@@ -31,16 +41,46 @@ public class UrlShortenerServiceImplementation implements UrlShortenerService {
     }
 
     @Override
+    public void setLinksDao(Dao<String> dao) {
+        lifecycleLock.lock();
+        try {
+            if (lifecycleStarted) {
+                throw new IllegalStateException(
+                        "Links DAO can't be changed after service start"
+                );
+            }
+
+            linksDao = dao;
+            handlers.setLinksDao(dao);
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    @Override
     public void start() {
-        server.start();
+        lifecycleLock.lock();
+        try {
+            server.start();
+            lifecycleStarted = true;
+        } finally {
+            lifecycleLock.unlock();
+        }
     }
 
     @Override
     public void stop() {
-        try (linksDao; usersDao) {
-            server.stop(STOP_DELAY_SECONDS);
-        } catch (IOException exception) {
-            throw new UncheckedIOException(exception);
+        lifecycleLock.lock();
+        try {
+            Dao<String> currentLinksDao = linksDao;
+
+            try (currentLinksDao; usersDao) {
+                server.stop(STOP_DELAY_SECONDS);
+            } catch (IOException exception) {
+                throw new UncheckedIOException(exception);
+            }
+        } finally {
+            lifecycleLock.unlock();
         }
     }
 }
