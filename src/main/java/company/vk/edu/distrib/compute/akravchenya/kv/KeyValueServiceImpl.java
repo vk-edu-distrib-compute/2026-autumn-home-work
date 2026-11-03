@@ -5,6 +5,7 @@ import company.vk.edu.distrib.compute.kv.KVService;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -18,16 +19,18 @@ final class KeyValueServiceImpl implements KVService {
     private static final String WORKER_THREADS_PROPERTY = "kv.workerThreads";
 
     private final HttpServer server;
+    private final HttpClient client;
     private ExecutorService executor;
     private boolean used;
 
     KeyValueServiceImpl(int port) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        this.client = HttpClient.newHttpClient();
         var storeDir = Files.createTempDirectory("kv-" + port + "-");
         var dao = new FileByteDao(storeDir);
 
         server.createContext("/v0/status", new KVRequestHandler(new StatusHandler()));
-        server.createContext("/v0/entity", new KVRequestHandler(new EntityHandler(dao)));
+        server.createContext("/v0/entity", new KVRequestHandler(new EntityHandler(dao, port, client)));
     }
 
     @Override
@@ -45,13 +48,11 @@ final class KeyValueServiceImpl implements KVService {
         if (!used) {
             throw new IllegalStateException("service is not started");
         }
-        try {
-            if (executor != null) {
-                executor.shutdownNow();
-            }
-        } finally {
-            server.stop(1);
+        if (executor != null) {
+            executor.shutdownNow();
         }
+        server.stop(0);
+        client.close();
     }
 
     private void configureExecutor() {

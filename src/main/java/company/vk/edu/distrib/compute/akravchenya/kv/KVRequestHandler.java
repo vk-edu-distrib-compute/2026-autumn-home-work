@@ -25,6 +25,8 @@ final class KVRequestHandler implements HttpHandler {
             sendEmpty(exchange, 404);
         } catch (IllegalArgumentException exception) {
             sendEmpty(exchange, 400);
+        } catch (QuorumNotReachedException exception) {
+            sendEmpty(exchange, 503);
         } catch (Exception exception) {
             sendEmpty(exchange, 500);
         }
