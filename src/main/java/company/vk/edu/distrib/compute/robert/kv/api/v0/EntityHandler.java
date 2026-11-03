@@ -54,27 +54,31 @@ public class EntityHandler extends AbstractHandler {
             .build();
     }
 
-    private static String extractId(Request request) {
+    protected static String extractId(Request request) {
         if (!PATH.equals(request.path())) {
             throw new NoSuchElementException();
         }
 
-        String id = null;
-        for (String parameter : request.query().split("&")) {
-            String[] parts = parameter.split("=", 2);
-            String name = decode(parts[0]);
-            if (ID_PARAMETER.equals(name)) {
-                if (id != null || parts.length != 2) {
-                    throw new BadRequestException();
-                }
-                id = decode(parts[1]);
-            }
-        }
-
+        String id = extractParameter(request, ID_PARAMETER);
         if (id == null || id.isEmpty()) {
             throw new BadRequestException();
         }
         return id;
+    }
+
+    protected static String extractParameter(Request request, String parameterName) {
+        String value = null;
+        for (String parameter : request.query().split("&")) {
+            String[] parts = parameter.split("=", 2);
+            String name = decode(parts[0]);
+            if (parameterName.equals(name)) {
+                if (value != null || parts.length != 2) {
+                    throw new BadRequestException();
+                }
+                value = decode(parts[1]);
+            }
+        }
+        return value;
     }
 
     private static String decode(String value) {

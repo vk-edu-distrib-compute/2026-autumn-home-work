@@ -113,7 +113,7 @@ public class RobertRemoteDao<T> implements Dao<T> {
             throw new IOException(e);
         }
 
-        if (response.statusCode() != HttpStatus.ACCEPTED.code()) {
+        if (response.statusCode() != HttpStatus.ACCEPTED.code() && response.statusCode() != HttpStatus.OK.code()) {
             throw new IOException();
         }
     }

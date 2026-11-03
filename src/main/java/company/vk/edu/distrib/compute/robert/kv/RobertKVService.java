@@ -15,7 +15,7 @@ import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.kv.KVService;
 import company.vk.edu.distrib.compute.robert.api.v0.StatusHandler;
 import company.vk.edu.distrib.compute.robert.dao.RobertByteDao;
-import company.vk.edu.distrib.compute.robert.kv.api.v0.EntityHandler;
+import company.vk.edu.distrib.compute.robert.kv.api.v0.ReplicatedEntityHandler;
 import company.vk.edu.distrib.compute.robert.kv.validation.implementations.KVValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +26,7 @@ public class RobertKVService implements KVService {
 
     private final int port;
     private final Dao<byte[]> dao;
+    private final RobertReplicationCoordinator coordinator;
     private final HttpServer httpServer;
     private final ReentrantLock lock = new ReentrantLock();
     private ServiceState state = ServiceState.NEW;
@@ -40,6 +41,7 @@ public class RobertKVService implements KVService {
             Integer.toString(port)
         );
         dao = new RobertByteDao(storageRoot, "entities", new KVValidator());
+        coordinator = new RobertReplicationCoordinator(port, dao);
         httpServer = HttpServer.create();
 
         String value = System.getenv().getOrDefault("KV_EXECUTOR_THREADS", "1");
@@ -57,7 +59,7 @@ public class RobertKVService implements KVService {
 
     private void initContexts() {
         httpServer.createContext(StatusHandler.PATH, new StatusHandler());
-        httpServer.createContext(EntityHandler.PATH, new EntityHandler(dao));
+        httpServer.createContext(ReplicatedEntityHandler.PATH, new ReplicatedEntityHandler(dao, coordinator));
     }
 
     @Override
@@ -79,7 +81,10 @@ public class RobertKVService implements KVService {
                 log.atInfo().log("KV service started on {}", httpServer.getAddress());
             } catch (IOException e) {
                 state = ServiceState.STOPPED;
-                executor.shutdown();
+                httpServer.stop(0);
+                executor.shutdownNow();
+                coordinator.close();
+                closeDao();
                 throw new UncheckedIOException(e);
             }
         } finally {
@@ -97,6 +102,7 @@ public class RobertKVService implements KVService {
 
             httpServer.stop(1);
             executor.shutdown();
+            coordinator.close();
             state = ServiceState.STOPPED;
             closeDao();
             log.atInfo().log("KV service stopped");
