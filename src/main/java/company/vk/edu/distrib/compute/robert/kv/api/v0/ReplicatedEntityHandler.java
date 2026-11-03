@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.robert.kv.api.v0;
 
 import java.io.IOException;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -18,6 +19,8 @@ import org.slf4j.LoggerFactory;
 public class ReplicatedEntityHandler extends EntityHandler {
     private static final Logger log = LoggerFactory.getLogger(ReplicatedEntityHandler.class);
     private static final String ACK_PARAMETER = "ack";
+    private static final String REPLICA_REQUEST_VALUE = "1";
+    private static final Set<String> REPLICATED_METHODS = Set.of("GET", "PUT", "DELETE");
 
     private final RobertReplicationCoordinator coordinator;
 
@@ -28,9 +31,7 @@ public class ReplicatedEntityHandler extends EntityHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        String replica = exchange.getRequestHeaders().getFirst(RobertReplicationCoordinator.REPLICA_HEADER);
-        String method = exchange.getRequestMethod();
-        if ("1".equals(replica) || !("GET".equals(method) || "PUT".equals(method) || "DELETE".equals(method))) {
+        if (shouldHandleLocally(exchange)) {
             super.handle(exchange);
             return;
         }
@@ -57,6 +58,11 @@ public class ReplicatedEntityHandler extends EntityHandler {
                 log.atDebug().setCause(e).log("Could not send replicated response");
             }
         });
+    }
+
+    private static boolean shouldHandleLocally(HttpExchange exchange) {
+        String replica = exchange.getRequestHeaders().getFirst(RobertReplicationCoordinator.REPLICA_HEADER);
+        return REPLICA_REQUEST_VALUE.equals(replica) || !REPLICATED_METHODS.contains(exchange.getRequestMethod());
     }
 
     private static CompletableFuture<Response> completedResponse(HttpStatus status) {
