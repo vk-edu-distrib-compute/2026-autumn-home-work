@@ -72,9 +72,15 @@ class ReplicaCoordinator {
                 log.error("Local replica failed", e);
             }
         }
-        while (acks < ack && acks + left >= ack) {
+        return collect(method, replies, left, ack - acks, found);
+    }
+
+    private static byte[] collect(String method, BlockingQueue<CompletableFuture<HttpResponse<byte[]>>> replies,
+                                  int count, int needed, byte @Nullable [] localValue) throws IOException {
+        byte[] found = localValue;
+        int acks = 0;
+        for (int left = count; acks < needed && acks + left >= needed; left--) {
             HttpResponse<byte[]> reply = poll(replies);
-            left--;
             if (reply != null && isAck(method, reply.statusCode())) {
                 acks++;
                 if (reply.statusCode() == HttpURLConnection.HTTP_OK) {
@@ -82,7 +88,7 @@ class ReplicaCoordinator {
                 }
             }
         }
-        if (acks < ack) {
+        if (acks < needed) {
             throw new IOException("Not enough replica acknowledgements");
         }
         return result(method, found);

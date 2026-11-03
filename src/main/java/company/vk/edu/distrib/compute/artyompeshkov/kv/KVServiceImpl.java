@@ -8,6 +8,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -20,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 public class KVServiceImpl implements KVService {
     private static final int MAX_VALUE_SIZE = 1024 * 1024;
+    private static final Set<String> METHODS = Set.of("GET", "PUT", "DELETE");
     private static final Logger log = LoggerFactory.getLogger(KVServiceImpl.class);
 
     private final BitcaskDao dao;
@@ -64,8 +66,7 @@ public class KVServiceImpl implements KVService {
     private void handleEntity(HttpExchange exchange, boolean coordinate) throws IOException {
         try (exchange) {
             try {
-                String method = exchange.getRequestMethod();
-                if (!"GET".equals(method) && !"PUT".equals(method) && !"DELETE".equals(method)) {
+                if (!METHODS.contains(exchange.getRequestMethod())) {
                     exchange.getResponseHeaders().set("Allow", "GET, PUT, DELETE");
                     exchange.sendResponseHeaders(HttpURLConnection.HTTP_BAD_METHOD, -1);
                     return;
@@ -107,12 +108,19 @@ public class KVServiceImpl implements KVService {
                     ? HttpURLConnection.HTTP_INTERNAL_ERROR : HttpURLConnection.HTTP_UNAVAILABLE, -1);
             return;
         }
-        switch (method) {
-            case "GET" -> sendValue(exchange, result);
+        sendResult(exchange, result, replicas.isEmpty());
+    }
+
+    private static void sendResult(HttpExchange exchange, byte[] result, boolean local) throws IOException {
+        switch (exchange.getRequestMethod()) {
+            case "GET" -> {
+                exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, result.length == 0 ? -1 : result.length);
+                exchange.getResponseBody().write(result);
+            }
             case "PUT" -> exchange.sendResponseHeaders(HttpURLConnection.HTTP_CREATED, -1);
-            case "DELETE" -> exchange.sendResponseHeaders(replicas.isEmpty()
+            case "DELETE" -> exchange.sendResponseHeaders(local
                     ? HttpURLConnection.HTTP_ACCEPTED : HttpURLConnection.HTTP_OK, -1);
-            default -> throw new IllegalArgumentException("Unsupported method: " + method);
+            default -> throw new IllegalArgumentException("Unsupported method: " + exchange.getRequestMethod());
         }
     }
 
@@ -143,10 +151,5 @@ public class KVServiceImpl implements KVService {
             throw new IllegalArgumentException("Value is too large");
         }
         return value;
-    }
-
-    private static void sendValue(HttpExchange exchange, byte[] value) throws IOException {
-        exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, value.length == 0 ? -1 : value.length);
-        exchange.getResponseBody().write(value);
     }
 }
