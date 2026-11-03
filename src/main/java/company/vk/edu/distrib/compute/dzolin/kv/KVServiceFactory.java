@@ -5,6 +5,7 @@ import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import java.io.IOException;
 
 @company.vk.edu.distrib.compute.kv.KVServiceTest
+@company.vk.edu.distrib.compute.kv.ReplicatedKVServiceTest
 public class KVServiceFactory extends AbstractHttpServiceFactory<KVServiceImpl> {
     @Override
     protected KVServiceImpl doCreate(int port) throws IOException {

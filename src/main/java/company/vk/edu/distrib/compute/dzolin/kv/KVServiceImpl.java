@@ -17,17 +17,22 @@ public class KVServiceImpl implements company.vk.edu.distrib.compute.kv.KVServic
     private static final String GET = "GET";
     private static final String PUT = "PUT";
     private static final String DELETE = "DELETE";
+    private static final int WORKER_COUNT = 8;
     private final HttpServer server;
     private final ExecutorService workers;
     private final PersistentDao dao;
+    private final ReplicationManager replicationManager;
+    private final int port;
 
     public KVServiceImpl(int port) throws IOException {
+        this.port = port;
         server = HttpServer.create(new InetSocketAddress(port), 0);
 
-        workers = Executors.newFixedThreadPool(1);
+        workers = Executors.newFixedThreadPool(WORKER_COUNT);
         server.setExecutor(workers);
 
         dao = new PersistentDao(Path.of(System.getProperty("java.io.tmpdir"), "dzolin-kv-" + port + ".dat").toString());
+        replicationManager = new ReplicationManager(port, dao);
 
         server.createContext("/v0/status", new ErrorHandler(this::getStatus));
         server.createContext("/v0/entity", new ErrorHandler(this::handleEntity));
@@ -52,9 +57,26 @@ public class KVServiceImpl implements company.vk.edu.distrib.compute.kv.KVServic
             throw new IllegalArgumentException("entity id must be present");
         }
 
-        switch (exchange.getRequestMethod()) {
-            case "GET" -> sendResponse(exchange, 200, dao.get(id));
-            case "PUT" -> {
+        if ("1".equals(getQueryParameter(exchange, "local"))) {
+            handleLocal(exchange, method, id);
+            return;
+        }
+
+        var cluster = replicationManager.getCluster();
+        var ack = replicationManager.getAck(exchange, cluster.size());
+        if (cluster.size() == 1 && cluster.getFirst() == port) {
+            handleLocal(exchange, method, id);
+            return;
+        }
+
+        var body = PUT.equals(method) ? exchange.getRequestBody().readAllBytes() : new byte[0];
+        replicationManager.handle(exchange, method, id, body, cluster, ack);
+    }
+
+    private void handleLocal(HttpExchange exchange, String method, String id) throws IOException {
+        switch (method) {
+            case GET -> sendResponse(exchange, 200, dao.get(id));
+            case PUT -> {
                 dao.upsert(id, exchange.getRequestBody().readAllBytes());
                 sendResponse(exchange, 201, new byte[0]);
             }
@@ -65,7 +87,7 @@ public class KVServiceImpl implements company.vk.edu.distrib.compute.kv.KVServic
         }
     }
 
-    private static void sendResponse(HttpExchange exchange, int statusCode, byte[] data) throws IOException {
+    static void sendResponse(HttpExchange exchange, int statusCode, byte[] data) throws IOException {
         exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
         if (data.length == 0) {
             exchange.sendResponseHeaders(statusCode, -1);
@@ -75,7 +97,7 @@ public class KVServiceImpl implements company.vk.edu.distrib.compute.kv.KVServic
         exchange.getResponseBody().write(data);
     }
 
-    private static String getQueryParameter(HttpExchange exchange, String name) {
+    static String getQueryParameter(HttpExchange exchange, String name) {
         var query = exchange.getRequestURI().getRawQuery();
         if (query == null) {
             return "";
@@ -102,6 +124,7 @@ public class KVServiceImpl implements company.vk.edu.distrib.compute.kv.KVServic
         try (dao) {
             server.stop(1);
             workers.shutdown();
+            replicationManager.close();
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
