@@ -15,10 +15,12 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
     private static final Logger log = LoggerFactory.getLogger(KVService.class);
     private final HttpServer server;
     private final Dao<byte[]> dao;
+    private final ReplicationCoordinator coordinator;
     private final ExecutorService executor;
 
     public KVService(Dao<byte[]> dao, int port, int numThreads) throws IOException {
         this.dao = dao;
+        coordinator = new ReplicationCoordinator(dao, port);
         server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/", createRouter());
         executor = Executors.newFixedThreadPool(numThreads);
@@ -28,9 +30,9 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
     private Router createRouter() {
         return new Router()
                 .add(HttpMethod.GET, "/v0/status", new GetStatusHandler())
-                .add(HttpMethod.GET, "/v0/entity", new GetEntryHandler(dao))
-                .add(HttpMethod.PUT, "/v0/entity", new PutEntryHandler(dao))
-                .add(HttpMethod.DELETE, "/v0/entity", new DeleteEntryHandler(dao));
+                .add(HttpMethod.GET, "/v0/entity", new GetEntryHandler(coordinator))
+                .add(HttpMethod.PUT, "/v0/entity", new PutEntryHandler(coordinator))
+                .add(HttpMethod.DELETE, "/v0/entity", new DeleteEntryHandler(coordinator));
     }
 
     @Override
@@ -44,6 +46,7 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
         log.info("Stopping");
         server.stop(1);
         executor.close();
+        coordinator.close();
 
         try {
             dao.close();

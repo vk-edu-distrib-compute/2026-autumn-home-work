@@ -3,12 +3,14 @@ package company.vk.edu.distrib.compute.nosorozhek.kv;
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.kv.KVServiceTest;
+import company.vk.edu.distrib.compute.kv.ReplicatedKVServiceTest;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 @KVServiceTest
+@ReplicatedKVServiceTest
 public class KVServiceFactory extends AbstractHttpServiceFactory<company.vk.edu.distrib.compute.kv.KVService> {
     private static final String DATA_DIR_ENV = "SERVICE_DATA_DIR";
     private static final String NUM_THREADS_ENV = "NUM_THREADS";
@@ -41,7 +43,9 @@ public class KVServiceFactory extends AbstractHttpServiceFactory<company.vk.edu.
     @Override
     protected company.vk.edu.distrib.compute.kv.KVService doCreate(int port) throws IOException {
         int numThreads = getNumThreads();
-        Path dataDirectory = getDataDirectory();
+        Path dataDirectory = getDataDirectory()
+                .resolve("kv")
+                .resolve(Integer.toString(port));
         Files.createDirectories(dataDirectory);
 
         Dao<byte[]> dao = new PersistentDao(dataDirectory);
