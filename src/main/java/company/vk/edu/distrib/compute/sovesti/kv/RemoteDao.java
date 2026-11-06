@@ -17,7 +17,6 @@ import company.vk.edu.distrib.compute.sovesti.urlshortener.http.StatusCodeConsta
 record RemoteDao(int port, HttpClient client) implements Dao<byte[]> {
 
     RemoteDao {
-        Objects.requireNonNull(port);
         Objects.requireNonNull(client);
     }
 
@@ -71,7 +70,7 @@ record RemoteDao(int port, HttpClient client) implements Dao<byte[]> {
     }
 
     private URI uri(String key) {
-        return URI.create("http://localhost:%d/v0/entity?id=%s".formatted(port, key));
+        return URI.create("http://localhost:%d/v0/entity?id=%s&coordinated=true".formatted(port, key));
     }
 
 }
