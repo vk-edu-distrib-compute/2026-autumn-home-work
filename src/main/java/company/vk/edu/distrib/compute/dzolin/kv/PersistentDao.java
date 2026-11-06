@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.dzolin.urlshortener;
+package company.vk.edu.distrib.compute.dzolin.kv;
 
 import company.vk.edu.distrib.compute.Dao;
 
@@ -11,12 +11,12 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class StringDao implements Dao<String> {
-    private final Map<String, String> storage = new ConcurrentHashMap<>();
+public class PersistentDao implements Dao<byte[]> {
+    private final Map<String, byte[]> storage = new ConcurrentHashMap<>();
     private final ReentrantLock lock = new ReentrantLock();
     private final RandomAccessFile log;
 
-    public StringDao(String path) throws IOException {
+    public PersistentDao(String path) throws IOException {
         var file = Path.of(path).toAbsolutePath();
         Files.createDirectories(file.getParent());
         log = new RandomAccessFile(file.toFile(), "rw");
@@ -26,30 +26,36 @@ public class StringDao implements Dao<String> {
     private void init() throws IOException {
         while (log.getFilePointer() < log.length()) {
             var key = log.readUTF();
-            var value = log.readUTF();
-            if (value.isEmpty()) {
+            var length = log.readInt();
+            if (length == -1) {
                 storage.remove(key);
             } else {
-                storage.put(key, value);
+                storage.put(key, readValue(length));
             }
         }
     }
 
-    @Override
-    public String get(String key) {
-        var value = storage.get(key);
-        if (value == null) {
-            throw new NoSuchElementException("no such value for key: " + key);
-        }
+    private byte[] readValue(int length) throws IOException {
+        var value = new byte[length];
+        log.readFully(value);
         return value;
     }
 
     @Override
-    public void upsert(String key, String value) throws IOException {
+    public byte[] get(String key) {
+        var value = storage.get(key);
+        if (value == null) {
+            throw new NoSuchElementException("no such value for key: " + key);
+        }
+        return value.clone();
+    }
+
+    @Override
+    public void upsert(String key, byte[] value) throws IOException {
         lock.lock();
         try {
             append(key, value);
-            storage.put(key, value);
+            storage.put(key, value.clone());
         } finally {
             lock.unlock();
         }
@@ -59,16 +65,18 @@ public class StringDao implements Dao<String> {
     public void delete(String key) throws IOException {
         lock.lock();
         try {
-            append(key, "");
+            log.writeUTF(key);
+            log.writeInt(-1);
             storage.remove(key);
         } finally {
             lock.unlock();
         }
     }
 
-    private void append(String key, String value) throws IOException {
+    private void append(String key, byte[] value) throws IOException {
         log.writeUTF(key);
-        log.writeUTF(value);
+        log.writeInt(value.length);
+        log.write(value);
     }
 
     @Override
