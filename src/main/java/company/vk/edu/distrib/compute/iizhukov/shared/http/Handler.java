@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers;
+package company.vk.edu.distrib.compute.iizhukov.shared.http;
 
 @FunctionalInterface
 public interface Handler {
