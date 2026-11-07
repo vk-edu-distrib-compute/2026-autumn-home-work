@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.virogg.urlshortener;
+package company.vk.edu.distrib.compute.virogg.http;
 
 import java.io.IOException;
 import java.io.InputStream;
