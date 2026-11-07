@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.virogg.urlshortener;
+package company.vk.edu.distrib.compute.virogg.urlshortener.links;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -28,6 +28,8 @@ public final class PersistentDao implements Dao<String> {
     private static final String END = "\n";
     private static final int UPSERT_FIELDS = 4;
     private static final int DELETE_FIELDS = 3;
+    private static final int UPSERT_END_FIELD = UPSERT_FIELDS - 1;
+    private static final int DELETE_END_FIELD = DELETE_FIELDS - 1;
 
     private final Path dir;
     private final ConcurrentMap<String, String> data = new ConcurrentHashMap<>();
@@ -122,9 +124,9 @@ public final class PersistentDao implements Dao<String> {
     }
 
     private void apply(String... fields) {
-        if (fields.length == UPSERT_FIELDS && UPSERT.equals(fields[0]) && fields[3].isEmpty()) {
+        if (fields.length == UPSERT_FIELDS && UPSERT.equals(fields[0]) && fields[UPSERT_END_FIELD].isEmpty()) {
             data.put(decode(fields[1]), decode(fields[2]));
-        } else if (fields.length == DELETE_FIELDS && DELETE.equals(fields[0]) && fields[2].isEmpty()) {
+        } else if (fields.length == DELETE_FIELDS && DELETE.equals(fields[0]) && fields[DELETE_END_FIELD].isEmpty()) {
             data.remove(decode(fields[1]));
         }
     }
