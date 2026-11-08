@@ -17,7 +17,9 @@ import java.io.IOException;
 import java.net.BindException;
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.SequencedMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -85,7 +87,7 @@ class KVServiceReplicationTest {
 
                 stopNode(cluster); // 4 live nodes left
                 runHttpCtx(HTTP_CLIENT, randomNode(cluster), () ->
-                        assertEquals(200, delete(ENTITY_PATH + key + ack(4)).statusCode()));
+                        assertEquals(202, delete(ENTITY_PATH + key + ack(4)).statusCode()));
 
                 stopNode(cluster); // 3 live nodes left
                 runHttpCtx(HTTP_CLIENT, randomNode(cluster), () -> {
