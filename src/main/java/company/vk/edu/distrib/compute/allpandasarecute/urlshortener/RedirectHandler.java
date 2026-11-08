@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.allpandasarecute.urlshortener;
 
 import java.io.IOException;
 import java.util.NoSuchElementException;
+import java.util.function.Supplier;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -13,9 +14,9 @@ import company.vk.edu.distrib.compute.Dao;
 class RedirectHandler implements HttpHandler {
     private static final Logger log = LoggerFactory.getLogger(RedirectHandler.class);
 
-    private final Dao<String> links;
+    private final Supplier<Dao<String>> links;
 
-    RedirectHandler(Dao<String> links) {
+    RedirectHandler(Supplier<Dao<String>> links) {
         this.links = links;
     }
 
@@ -47,7 +48,7 @@ class RedirectHandler implements HttpHandler {
             HttpResponses.sendEmpty(exchange, HttpConstants.UNPROCESSABLE_CONTENT);
             return;
         }
-        exchange.getResponseHeaders().set("Location", links.get(id));
+        exchange.getResponseHeaders().set("Location", links.get().get(id));
         HttpResponses.sendEmpty(exchange, HttpConstants.MOVED_PERMANENTLY);
     }
 }

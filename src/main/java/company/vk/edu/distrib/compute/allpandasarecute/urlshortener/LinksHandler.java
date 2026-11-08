@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.NoSuchElementException;
+import java.util.function.Supplier;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -20,10 +21,10 @@ class LinksHandler implements HttpHandler {
     private static final String AUTHENTICATE_CHALLENGE = "Basic realm=\"url-shortener\"";
 
     private final int port;
-    private final Dao<String> links;
+    private final Supplier<Dao<String>> links;
     private final BasicAuthenticator authenticator;
 
-    LinksHandler(int port, Dao<String> links, BasicAuthenticator authenticator) {
+    LinksHandler(int port, Supplier<Dao<String>> links, BasicAuthenticator authenticator) {
         this.port = port;
         this.links = links;
         this.authenticator = authenticator;
@@ -74,7 +75,7 @@ class LinksHandler implements HttpHandler {
             return;
         }
         String id = Ids.generate();
-        links.upsert(id, longLink);
+        links.get().upsert(id, longLink);
         HttpResponses.sendBody(exchange, HttpConstants.CREATED, "http://localhost:%d/%s".formatted(port, id));
     }
 
@@ -83,7 +84,7 @@ class LinksHandler implements HttpHandler {
             HttpResponses.sendEmpty(exchange, HttpConstants.UNPROCESSABLE_CONTENT);
             return;
         }
-        HttpResponses.sendBody(exchange, HttpConstants.OK, links.get(id));
+        HttpResponses.sendBody(exchange, HttpConstants.OK, links.get().get(id));
     }
 
     private void replace(HttpExchange exchange, String id) throws IOException {
@@ -96,8 +97,8 @@ class LinksHandler implements HttpHandler {
             HttpResponses.sendEmpty(exchange, HttpConstants.UNPROCESSABLE_CONTENT);
             return;
         }
-        links.get(id);
-        links.upsert(id, longLink);
+        links.get().get(id);
+        links.get().upsert(id, longLink);
         HttpResponses.sendEmpty(exchange, HttpConstants.OK);
     }
 
@@ -106,7 +107,7 @@ class LinksHandler implements HttpHandler {
             HttpResponses.sendEmpty(exchange, HttpConstants.UNPROCESSABLE_CONTENT);
             return;
         }
-        links.delete(id);
+        links.get().delete(id);
         HttpResponses.sendEmpty(exchange, HttpConstants.ACCEPTED);
     }
 
