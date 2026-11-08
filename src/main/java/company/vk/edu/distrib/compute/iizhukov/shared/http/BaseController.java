@@ -1,7 +1,6 @@
-package company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers;
+package company.vk.edu.distrib.compute.iizhukov.shared.http;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -10,8 +9,13 @@ import java.util.function.Function;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import company.vk.edu.distrib.compute.Dao;
+import org.jspecify.annotations.Nullable;
 
-public abstract class BaseController {
+public abstract class BaseController<T> {
+    @Nullable
+    private Dao<T> dao;
+
     private final int port;
     private final Map<String, Function<Request, Response>> methods = Map.of(
             "GET", this::get,
@@ -21,13 +25,21 @@ public abstract class BaseController {
     );
     private final List<Middleware> middlewares;
 
-    public BaseController(int port) {
+    protected BaseController(int port) {
         this(port, List.of());
     }
 
-    public BaseController(int port, List<Middleware> middlewares) {
+    protected BaseController(int port, List<Middleware> middlewares) {
         this.port = port;
         this.middlewares = List.copyOf(middlewares);
+    }
+
+    public void setDao(Dao<T> dao) {
+        this.dao = dao;
+    }
+
+    protected Dao<T> dao() {
+        return Objects.requireNonNull(dao);
     }
 
     public HttpHandler handler(List<Middleware> globalMiddlewares) {
@@ -40,28 +52,31 @@ public abstract class BaseController {
     private void handle(HttpExchange exchange, List<Middleware> allMiddlewares) throws IOException {
         try (exchange) {
             var request = Request.from(exchange);
-            var method = methods.getOrDefault(exchange.getRequestMethod(), value -> methodNotAllowed());
-            var handler = chain(value -> Objects.requireNonNull(method.apply(value)), allMiddlewares);
-            var response = handler.handle(request);
-            makeExchange(exchange, response);
+            var response = chain(this::route, allMiddlewares).handle(request);
+            write(exchange, response);
         }
     }
 
-    private void makeExchange(HttpExchange exchange, Response response) throws IOException {
-        response.headers().forEach((k, v) -> {
-            exchange.getResponseHeaders().set(k, v);
-        });
+    private Response route(Request request) {
+        if (!matches(request)) {
+            return Response.builder()
+                    .setStatus(HttpStatus.NOT_FOUND)
+                    .build();
+        }
+
+        return methods.getOrDefault(request.method(), value -> methodNotAllowed()).apply(request);
+    }
+
+    private static void write(HttpExchange exchange, Response response) throws IOException {
+        response.headers().forEach(exchange.getResponseHeaders()::set);
         exchange.sendResponseHeaders(response.status(), response.length());
 
-        try (var out = exchange.getResponseBody()) {
-            out.write(response.content().getBytes(StandardCharsets.UTF_8));
+        try (var output = exchange.getResponseBody()) {
+            output.write(response.content());
         }
     }
 
-    private static Handler chain(
-            Handler handler,
-            List<Middleware> middlewares
-    ) {
+    private static Handler chain(Handler handler, List<Middleware> middlewares) {
         Handler result = handler;
 
         for (int i = middlewares.size() - 1; i >= 0; i--) {
@@ -71,11 +86,15 @@ public abstract class BaseController {
         return result;
     }
 
+    protected boolean matches(Request request) {
+        return request.path().startsWith(path());
+    }
+
     protected int port() {
         return port;
     }
 
-    private Response methodNotAllowed() {
+    private static Response methodNotAllowed() {
         return Response.builder()
                 .setStatus(HttpStatus.METHOD_NOT_ALLOWED)
                 .build();

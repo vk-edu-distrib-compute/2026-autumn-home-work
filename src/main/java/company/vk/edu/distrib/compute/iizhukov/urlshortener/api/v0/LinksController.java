@@ -1,21 +1,22 @@
 package company.vk.edu.distrib.compute.iizhukov.urlshortener.api.v0;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
 
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.BaseController;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.HttpStatus;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Request;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Response;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.BaseController;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.HttpStatus;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Request;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Response;
 import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.middlewares.AuthMiddleware;
+import company.vk.edu.distrib.compute.iizhukov.urlshortener.db.StorageException;
 import company.vk.edu.distrib.compute.iizhukov.urlshortener.db.dao.LinksDao;
 import company.vk.edu.distrib.compute.iizhukov.urlshortener.utils.GeneratorUtils;
 
-public class LinksController extends BaseController {
-    private final LinksDao dao = LinksDao.create();
-
+public class LinksController extends BaseController<String> {
     public LinksController(int port) {
         super(port, List.of(new AuthMiddleware()));
+        setDao(LinksDao.create());
     }
 
     @Override
@@ -29,13 +30,15 @@ public class LinksController extends BaseController {
 
         try {
             return Response.builder()
-                    .setContent(dao.get(key))
+                    .setContent(dao().get(key))
                     .setStatus(HttpStatus.OK)
                     .build();
         } catch (NoSuchElementException e) {
             return Response.builder()
                     .setStatus(HttpStatus.NOT_FOUND)
                     .build();
+        } catch (IOException e) {
+            throw new StorageException("cant read link", e);
         }
     }
 
@@ -44,7 +47,7 @@ public class LinksController extends BaseController {
         var url = request.body();
         var key = GeneratorUtils.generateKey(10);
 
-        dao.upsert(key, url);
+        upsert(key, url);
 
         return Response.builder()
                 .setStatus(HttpStatus.CREATED)
@@ -58,14 +61,16 @@ public class LinksController extends BaseController {
         var url = request.body();
 
         try {
-            dao.get(key);
+            dao().get(key);
         } catch (NoSuchElementException e) {
             return Response.builder()
                     .setStatus(HttpStatus.NOT_FOUND)
                     .build();
+        } catch (IOException e) {
+            throw new StorageException("cant read link", e);
         }
 
-        dao.upsert(key, url);
+        upsert(key, url);
 
         return Response.builder()
                 .setStatus(HttpStatus.OK)
@@ -76,10 +81,23 @@ public class LinksController extends BaseController {
     @Override
     public Response delete(Request request) {
         var key = request.path().substring(path().length() + 1);
-        dao.delete(key);
+
+        try {
+            dao().delete(key);
+        } catch (IOException e) {
+            throw new StorageException("cant delete link", e);
+        }
 
         return Response.builder()
                 .setStatus(HttpStatus.ACCEPTED)
                 .build();
+    }
+
+    private void upsert(String key, String value) {
+        try {
+            dao().upsert(key, value);
+        } catch (IOException e) {
+            throw new StorageException("cant write link", e);
+        }
     }
 }
