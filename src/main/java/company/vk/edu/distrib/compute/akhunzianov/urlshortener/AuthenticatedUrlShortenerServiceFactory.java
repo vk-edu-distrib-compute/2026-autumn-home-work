@@ -12,7 +12,7 @@ public class AuthenticatedUrlShortenerServiceFactory extends AbstractHttpService
     @Override
     protected UrlShortenerService doCreate(int port) throws IOException {
         return new UrlShortenerServiceImpl(port,
-            UrlShortenerServiceFactory.storage("links"),
+            UrlShortenerServiceFactory.links(),
             UrlShortenerServiceFactory.storage("users"));
     }
 }
