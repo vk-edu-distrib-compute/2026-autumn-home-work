@@ -9,11 +9,13 @@ import company.vk.edu.distrib.compute.Dao;
 
 final class LinkRequests {
     private final int port;
+    private final LinkModeration moderation;
     private Dao<String> links;
 
-    LinkRequests(int port, Dao<String> links) {
+    LinkRequests(int port, Dao<String> links, LinkModeration moderation) {
         this.port = port;
         this.links = links;
+        this.moderation = moderation;
     }
 
     void use(Dao<String> dao) {
@@ -27,7 +29,9 @@ final class LinkRequests {
             return;
         }
         String id = allocateId();
-        links.upsert(id, link.orElseThrow());
+        String stored = link.orElseThrow();
+        links.upsert(id, stored);
+        moderation.created(id, stored);
         HttpReplies.sendText(exchange, HttpStatus.CREATED, "http://localhost:%d/%s".formatted(port, id));
     }
 

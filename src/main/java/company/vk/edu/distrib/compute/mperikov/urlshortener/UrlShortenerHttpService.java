@@ -16,6 +16,7 @@ public final class UrlShortenerHttpService implements UrlShortenerService {
     private final int port;
     private final HttpServer server;
     private final LinkRequests linkRequests;
+    private final LinkModeration moderation;
     private final Dao<String> users;
     private Dao<String> links;
     private boolean started;
@@ -25,7 +26,8 @@ public final class UrlShortenerHttpService implements UrlShortenerService {
         this.port = port;
         this.links = links;
         this.users = users;
-        linkRequests = new LinkRequests(port, links);
+        moderation = new LinkModeration(links);
+        linkRequests = new LinkRequests(port, links, moderation);
         server = HttpServer.create();
         server.createContext("/", new UrlShortenerHandler(linkRequests, users));
     }
@@ -40,6 +42,15 @@ public final class UrlShortenerHttpService implements UrlShortenerService {
         }
         links = dao;
         linkRequests.use(dao);
+        moderation.use(dao);
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (daoFixed) {
+            throw new IllegalStateException("Kafka cannot be changed after start or stop");
+        }
+        moderation.servers(bootstrapServers);
     }
 
     @Override
@@ -48,10 +59,13 @@ public final class UrlShortenerHttpService implements UrlShortenerService {
             throw new IllegalStateException("Service is already started");
         }
         daoFixed = true;
+        moderation.seal();
+        moderation.open();
         try {
             server.bind(new InetSocketAddress("localhost", port), 0);
             server.start();
         } catch (IOException ex) {
+            moderation.close();
             throw new IllegalStateException("Failed to start URL shortener", ex);
         }
         started = true;
@@ -61,11 +75,13 @@ public final class UrlShortenerHttpService implements UrlShortenerService {
     @Override
     public void stop() {
         daoFixed = true;
+        moderation.seal();
         try {
             if (started) {
                 server.stop(5);
             }
         } finally {
+            moderation.close();
             closeDao(links);
             closeDao(users);
             started = false;
