@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 final class LinkModerator {
     private final List<String> bannedWords;
@@ -54,7 +55,8 @@ final class LinkModerator {
         if (!Arrays.equals(key, event.id().getBytes(StandardCharsets.UTF_8))) {
             throw new IllegalArgumentException("Event key does not match link ID");
         }
-        String url = URLDecoder.decode(event.url(), StandardCharsets.UTF_8).toLowerCase();
+        String url =
+                URLDecoder.decode(event.url(), StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
         String reason = "";
         for (String word : bannedWords) {
             if (url.contains(word)) {

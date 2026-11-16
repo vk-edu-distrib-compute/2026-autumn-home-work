@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 
 @ModerationServiceFactoryTest
 @ModerationDeadLetterTest
@@ -25,7 +26,7 @@ public final class KafkaModerationServiceFactory implements ModerationServiceFac
                     new String(input.readAllBytes(), StandardCharsets.UTF_8)
                             .lines()
                             .filter(word -> !word.isEmpty())
-                            .map(String::toLowerCase)
+                            .map(word -> word.toLowerCase(Locale.ROOT))
                             .toList();
             return new KafkaModerationService(bootstrapServers, words);
         }

@@ -35,7 +35,6 @@ public final class KafkaModerationService implements ModerationService {
     private final AtomicBoolean running = new AtomicBoolean();
     private boolean startCalled;
     private boolean stopCalled;
-    @Nullable private KafkaProducer<byte[], byte[]> producer;
     @Nullable private KafkaConsumer<byte[], byte[]> consumer;
     @Nullable private Thread worker;
 
@@ -55,14 +54,13 @@ public final class KafkaModerationService implements ModerationService {
                 throw new IllegalStateException("Moderation service can only be started once");
             }
             startCalled = true;
+            KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProperties());
             try {
-                KafkaProducer<byte[], byte[]> sender = new KafkaProducer<>(producerProperties());
-                producer = sender;
                 KafkaConsumer<byte[], byte[]> receiver = new KafkaConsumer<>(consumerProperties());
                 consumer = receiver;
                 receiver.subscribe(List.of(ModerationEventUtils.CREATED_TOPIC));
                 running.set(true);
-                Thread thread = Thread.ofVirtual().unstarted(() -> run(receiver, sender));
+                Thread thread = Thread.ofVirtual().unstarted(() -> run(receiver, producer));
                 worker = thread;
                 thread.start();
             } catch (RuntimeException e) {
