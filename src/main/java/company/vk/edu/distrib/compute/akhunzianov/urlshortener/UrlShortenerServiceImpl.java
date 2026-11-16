@@ -52,7 +52,7 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
 
     private final SecureRandom random = new SecureRandom();
     private final int port;
-    private final Dao<String> links;
+    private Dao<String> links;
 
     @Nullable
     private final Dao<String> users;
@@ -66,6 +66,19 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
         this.port = port;
         this.links = links;
         this.users = users;
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        if (server != null) {
+            throw new IllegalStateException("Links storage can only be replaced before start");
+        }
+        try {
+            links.close();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Cannot close the replaced storage", e);
+        }
+        links = dao;
     }
 
     @Override
