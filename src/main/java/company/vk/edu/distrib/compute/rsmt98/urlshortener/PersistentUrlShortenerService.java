@@ -37,6 +37,8 @@ public final class PersistentUrlShortenerService implements UrlShortenerService 
     @Nullable private ExecutorService executor;
     @Nullable private Dao<String> linkDao;
     @Nullable private FileStringDao userDao;
+    @Nullable private String kafkaBootstrapServers;
+    @Nullable private KafkaLinkModeration moderation;
 
     public PersistentUrlShortenerService(int port) {
         this.port = port;
@@ -54,6 +56,23 @@ public final class PersistentUrlShortenerService implements UrlShortenerService 
                         "Links storage must be set before starting the service");
             }
             linkDao = dao;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        lock.lock();
+        try {
+            if (stopCalled) {
+                throw new IllegalStateException("Service is already stopped");
+            }
+            if (startCalled) {
+                throw new IllegalStateException(
+                        "Kafka must be configured before starting the service");
+            }
+            kafkaBootstrapServers = bootstrapServers;
         } finally {
             lock.unlock();
         }
@@ -83,13 +102,24 @@ public final class PersistentUrlShortenerService implements UrlShortenerService 
                 ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
                 executor = workers;
                 httpServer.setExecutor(workers);
+                LinkStore linkStore = new LinkStore(links);
+                String bootstrapServers = kafkaBootstrapServers;
+                KafkaLinkModeration linkModeration =
+                        bootstrapServers == null
+                                ? null
+                                : new KafkaLinkModeration(bootstrapServers, linkStore);
+                moderation = linkModeration;
                 httpServer.createContext(
                         "/",
                         new UrlShortenerHandler(
                                 port,
-                                links,
+                                linkStore,
                                 users,
-                                () -> linksAvailable(links) && users.isAvailable()));
+                                () -> linksAvailable(links) && users.isAvailable(),
+                                linkModeration));
+                if (linkModeration != null) {
+                    linkModeration.start();
+                }
                 httpServer.start();
             } catch (IOException | RuntimeException e) {
                 try {
@@ -121,9 +151,11 @@ public final class PersistentUrlShortenerService implements UrlShortenerService 
     private void closeResources() {
         Dao<String> links = linkDao;
         FileStringDao users = userDao;
+        KafkaLinkModeration linkModeration = moderation;
         ExecutorService workers = executor;
         try (links;
                 users;
+                linkModeration;
                 workers) {
             HttpServer httpServer = server;
             if (httpServer != null) {
