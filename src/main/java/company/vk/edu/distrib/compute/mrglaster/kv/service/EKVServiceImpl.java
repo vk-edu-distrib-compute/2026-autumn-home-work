@@ -5,6 +5,7 @@ import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.kv.KVService;
 import company.vk.edu.distrib.compute.mrglaster.kv.controller.EntityController;
 import company.vk.edu.distrib.compute.mrglaster.kv.controller.KVStatusController;
+import company.vk.edu.distrib.compute.mrglaster.kv.replication.coordination.ReplicationCoordinator;
 import company.vk.edu.distrib.compute.mrglaster.urlshortener.controller.manager.ControllerManager;
 import company.vk.edu.distrib.compute.mrglaster.urlshortener.dao.PersistentDao;
 import company.vk.edu.distrib.compute.mrglaster.urlshortener.exception.DataSavingException;
@@ -18,13 +19,18 @@ public class EKVServiceImpl implements KVService {
     private final HttpServer httpServer;
     private static final int SHUTDOWN_DELAY = 5;
     private final Dao<byte[]> entityDao;
-    private static final String ENTITY_STORAGE_FILE = "/tmp/entity";
+    private static final String PATH_BASE = "/tmp/entity-";
 
     public EKVServiceImpl(int port) throws IOException {
         this.httpServer = HttpServer.create(new InetSocketAddress(port), 0);
         ControllerManager routingManager = new ControllerManager(null);
-        this.entityDao = new PersistentDao<>(ENTITY_STORAGE_FILE, PersistentDao.byteArraySerializer());
-        routingManager.addController(new EntityController(entityDao));
+        this.entityDao = new PersistentDao<>(
+                PATH_BASE + port,
+                PersistentDao.byteArraySerializer()
+        );
+        ReplicationCoordinator coordinator = new ReplicationCoordinator(port, entityDao);
+
+        routingManager.addController(new EntityController(entityDao, coordinator));
         routingManager.addController(new KVStatusController());
         routingManager.register(this.httpServer);
     }
