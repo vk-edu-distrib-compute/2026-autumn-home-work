@@ -22,6 +22,8 @@ final class KvServiceImpl implements KVService {
     private static final String GET_METHOD = "GET";
     private static final byte[] EMPTY_BODY = new byte[0];
     private static final int SINGLE_THREAD = 1;
+    private static final int STOP_DELAY_SECONDS = 1;
+    private static final int MAX_BODY_BYTES = 16 * 1024 * 1024;
 
     private final int port;
     private final int threads;
@@ -58,7 +60,7 @@ final class KvServiceImpl implements KVService {
     @Override
     public void stop() {
         if (server != null) {
-            server.stop(0);
+            server.stop(STOP_DELAY_SECONDS);
         }
         if (executor != null) {
             executor.close();
@@ -97,7 +99,12 @@ final class KvServiceImpl implements KVService {
         switch (exchange.getRequestMethod()) {
             case "GET" -> get(exchange, key);
             case "PUT" -> {
-                data.upsert(key, exchange.getRequestBody().readAllBytes());
+                byte[] body = exchange.getRequestBody().readNBytes(MAX_BODY_BYTES + 1);
+                if (body.length > MAX_BODY_BYTES) {
+                    respond(exchange, 413, EMPTY_BODY);
+                    return;
+                }
+                data.upsert(key, body); 
                 respond(exchange, 201, EMPTY_BODY);
             }
             case "DELETE" -> {

@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.HexFormat;
 import java.util.NoSuchElementException;
 import java.util.concurrent.locks.ReentrantLock;
+import java.nio.file.StandardCopyOption;
 
 import company.vk.edu.distrib.compute.Dao;
 
@@ -40,11 +41,23 @@ final class BinaryFileDao implements Dao<byte[]> {
         if (value == null) {
             throw new IllegalArgumentException("Null value");
         }
+
         Path target = pathFor(key);
         lock.lock();
         try {
             Files.createDirectories(target.getParent());
-            Files.write(target, value);
+            Path temporary = Files.createTempFile(target.getParent(), "value-", ".tmp");
+            try {
+                Files.write(temporary, value);
+                Files.move(
+                    temporary,
+                    target,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+                );
+            } finally {
+                Files.deleteIfExists(temporary);
+            }
         } finally {
             lock.unlock();
         }
