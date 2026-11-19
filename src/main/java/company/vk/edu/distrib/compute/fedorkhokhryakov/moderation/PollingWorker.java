@@ -47,7 +47,7 @@ public final class PollingWorker<K, V> {
         running.set(false);
         consumer.wakeup();
         try {
-            if (!thread.join(JOIN_TIMEOUT)) {
+            if (!thread.join(JOIN_TIMEOUT) && log.isWarnEnabled()) {
                 log.warn("Worker {} did not stop in {}", thread.getName(), JOIN_TIMEOUT);
             }
         } catch (InterruptedException e) {
@@ -62,7 +62,9 @@ public final class PollingWorker<K, V> {
                 try {
                     pollOnce();
                 } catch (WakeupException e) {
-                    log.debug("Worker {} woken up", thread.getName());
+                    if (log.isDebugEnabled()) {
+                        log.debug("Worker {} woken up", thread.getName());
+                    }
                     break;
                 } catch (KafkaException e) {
                     log.warn("Failed to process records from {}", topic, e);

@@ -101,7 +101,7 @@ public final class KafkaModerationService implements ModerationService {
                 EventCodecs.encode(result)
             ),
             (metadata, error) -> {
-                if (error != null) {
+                if (error != null && log.isWarnEnabled()) {
                     log.warn("Failed to publish moderation result of {}", event.id(), error);
                 }
             }
@@ -131,11 +131,15 @@ public final class KafkaModerationService implements ModerationService {
                 record.value(),
                 headers
             ));
+            if (log.isInfoEnabled()) {
+                log.info("Message at {}-{} offset {} sent to dead letter topic: {}",
+                    record.topic(), record.partition(), record.offset(), error);
+            }
         } catch (KafkaException e) {
-            log.warn("Failed to send message at offset {} to dead letter topic", record.offset(), e);
+            if (log.isWarnEnabled()) {
+                log.warn("Failed to send message at offset {} to dead letter topic", record.offset(), e);
+            }
         }
-        log.info("Message at {}-{} offset {} sent to dead letter topic: {}",
-            record.topic(), record.partition(), record.offset(), error);
     }
 
     private Map<String, Object> consumerConfig() {

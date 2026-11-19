@@ -96,13 +96,15 @@ public final class LinkModerationClient implements LinkCreatedListener {
                     EventCodecs.encode(event)
                 ),
                 (metadata, error) -> {
-                    if (error != null) {
+                    if (error != null && log.isWarnEnabled()) {
                         log.warn("Failed to send link {} to moderation", event.id(), error);
                     }
                 }
             );
         } catch (KafkaException e) {
-            log.warn("Failed to send link {} to moderation", event.id(), e);
+            if (log.isWarnEnabled()) {
+                log.warn("Failed to send link {} to moderation", event.id(), e);
+            }
         }
     }
 
@@ -111,7 +113,9 @@ public final class LinkModerationClient implements LinkCreatedListener {
             try {
                 apply(EventCodecs.decodeModerationResult(record.value()));
             } catch (IllegalArgumentException e) {
-                log.warn("Skipping malformed moderation result at offset {}", record.offset(), e);
+                if (log.isWarnEnabled()) {
+                    log.warn("Skipping malformed moderation result at offset {}", record.offset(), e);
+                }
             }
         }
     }
@@ -122,9 +126,13 @@ public final class LinkModerationClient implements LinkCreatedListener {
         }
         try {
             dao.delete(result.id());
-            log.info("Link {} removed by moderation: {}", result.id(), result.reason());
+            if (log.isInfoEnabled()) {
+                log.info("Link {} removed by moderation: {}", result.id(), result.reason());
+            }
         } catch (IOException e) {
-            log.warn("Failed to remove link {}", result.id(), e);
+            if (log.isWarnEnabled()) {
+                log.warn("Failed to remove link {}", result.id(), e);
+            }
         }
     }
 
