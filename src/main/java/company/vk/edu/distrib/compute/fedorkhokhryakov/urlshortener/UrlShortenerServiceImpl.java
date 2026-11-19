@@ -14,6 +14,8 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     private final InMemoryUserDao userDao;
     private Dao<String> dao;
     private Optional<HttpServer> server = Optional.empty();
+    private Optional<String> kafkaBootstrapServers = Optional.empty();
+    private Optional<LinkModerationClient> moderation = Optional.empty();
     private boolean started;
 
     public UrlShortenerServiceImpl(int port, Dao<String> dao) {
@@ -40,6 +42,15 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     }
 
     @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (started) {
+            throw new IllegalStateException("Kafka must be configured before the service is started");
+        }
+
+        this.kafkaBootstrapServers = Optional.of(bootstrapServers);
+    }
+
+    @Override
     public void start() {
         if (server.isPresent()) {
             throw new IllegalStateException("Service has already been started");
@@ -50,8 +61,13 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
             HttpServer httpServer =
                 HttpServer.create(new InetSocketAddress("localhost", port), 0);
 
+            moderation = kafkaBootstrapServers.flatMap(servers -> LinkModerationClient.start(servers, dao));
+            LinkCreatedListener listener = moderation
+                .map(LinkCreatedListener.class::cast)
+                .orElse(LinkCreatedListener.NONE);
+
             UrlShortenerHttpHandler handler =
-                new UrlShortenerHttpHandler(port, dao, userDao);
+                new UrlShortenerHttpHandler(port, dao, userDao, listener);
 
             httpServer.createContext("/v0/status", handler::handleStatus);
             httpServer.createContext("/v0/links", handler::handleLinks);
@@ -73,6 +89,8 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
 
         httpServer.stop(STOP_DELAY_SECONDS);
         server = Optional.empty();
+        moderation.ifPresent(LinkModerationClient::close);
+        moderation = Optional.empty();
     }
 
 }

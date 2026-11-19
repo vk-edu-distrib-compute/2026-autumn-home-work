@@ -31,16 +31,19 @@ private final int port;
 private final Dao<String> dao;
 private final InMemoryUserDao userDao;
 private final BasicAuthenticator authenticator;
+private final LinkCreatedListener linkCreatedListener;
 
 public UrlShortenerHttpHandler(
     int port,
     Dao<String> dao,
-    InMemoryUserDao userDao
+    InMemoryUserDao userDao,
+    LinkCreatedListener linkCreatedListener
 ) {
     this.port = port;
     this.dao = dao;
     this.userDao = userDao;
     this.authenticator = new BasicAuthenticator(userDao);
+    this.linkCreatedListener = linkCreatedListener;
 }
 
 public void handleStatus(HttpExchange exchange) throws IOException {
@@ -165,6 +168,7 @@ private void handleCreate(HttpExchange exchange) throws IOException {
     } while (exists(id));
 
     dao.upsert(id, longLink);
+    linkCreatedListener.linkCreated(id, longLink);
 
     String shortLink = "http://localhost:" + port + "/" + id;
 
