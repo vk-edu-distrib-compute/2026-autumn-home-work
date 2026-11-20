@@ -18,7 +18,7 @@ public class MyKVService implements KVService {
 
     public MyKVService(HttpServer httpServer) throws IOException {
         this.httpServer = httpServer;
-        this.dao = new MyKVDao();
+        this.dao = new MyKVDao(httpServer.getAddress().getPort());
 
         httpServer.createContext("/v0/status", this::handleStatus);
         httpServer.createContext("/v0/entity", this::handleEntity);
