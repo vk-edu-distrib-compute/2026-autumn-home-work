@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.virogg.urlshortener;
+package company.vk.edu.distrib.compute.virogg.urlshortener.links;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -6,13 +6,14 @@ import java.net.HttpURLConnection;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.virogg.http.HttpUtils;
 
-public final class UsersHandler implements HttpHandler {
+final class UsersHandler implements HttpHandler {
     static final String PATH = "/internal/users";
 
     private final Dao<String> users;
 
-    public UsersHandler(Dao<String> users) {
+    UsersHandler(Dao<String> users) {
         this.users = users;
     }
 
