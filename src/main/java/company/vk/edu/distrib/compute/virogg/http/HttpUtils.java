@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.virogg.urlshortener;
+package company.vk.edu.distrib.compute.virogg.http;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,12 +13,12 @@ import org.slf4j.LoggerFactory;
 
 public final class HttpUtils {
     public static final int HTTP_UNPROCESSABLE_CONTENT = 422;
+    public static final int NO_BODY = -1;
     public static final String GET = "GET";
     public static final String POST = "POST";
     public static final String PUT = "PUT";
     public static final String DELETE = "DELETE";
     private static final int MAX_BODY_BYTES = 8 * 1024;
-    private static final int NO_BODY = -1;
     private static final int NOT_SENT = -1;
     private static final Logger log = LoggerFactory.getLogger(HttpUtils.class);
 
