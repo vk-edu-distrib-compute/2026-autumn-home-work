@@ -26,6 +26,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
 
     private final SecureRandom random = new SecureRandom();
     private final HttpServer httpServer;
+
     private Dao<String> linksDao;
     private final AuthService authService;
     private boolean startedOrStopped;
