@@ -18,6 +18,7 @@ public class DDKudrinKVService implements KVService {
     private final HttpServer server;
     private final Dao<byte[]> dao;
     private final ExecutorService executor;
+    private final DDKudrinEntityHandler entityHandler;
 
     public DDKudrinKVService(int port) throws IOException {
         this(port, Path.of(System.getProperty("user.home"), "data", "kv", port + ".wal"),
@@ -28,7 +29,8 @@ public class DDKudrinKVService implements KVService {
         this.dao = new DDKudrinKVDao(file);
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.server.createContext("/v0/status", new DDKudrinStatusHandler());
-        this.server.createContext("/", new DDKudrinEntityHandler(dao));
+        this.entityHandler = new DDKudrinEntityHandler(dao);
+        this.server.createContext("/", entityHandler);
         this.executor = Executors.newFixedThreadPool(threads);
         this.server.setExecutor(executor);
     }
@@ -57,6 +59,7 @@ public class DDKudrinKVService implements KVService {
     @Override
     public void stop() {
         server.stop(1);
+        entityHandler.close();
         if (executor != null) {
             executor.close();
         }

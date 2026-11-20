@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Pattern;
+import java.util.function.BiConsumer;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -26,9 +27,22 @@ public class DDKudrinLinksHandler implements HttpHandler {
     private final SecureRandom random = new SecureRandom();
     private final Lock lock = new ReentrantLock();
     private final Dao<String> dao;
+    private final BiConsumer<String, String> onCreated;
 
-    public DDKudrinLinksHandler(Dao<String> dao) {
+    public DDKudrinLinksHandler(Dao<String> dao, BiConsumer<String, String> onCreated) {
         this.dao = dao;
+        this.onCreated = onCreated;
+    }
+
+    public void deleteIfUnchanged(String id, String url) throws IOException {
+        lock.lock();
+        try {
+            if (Objects.equals(url, findLink(id))) {
+                dao.delete(id);
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
@@ -104,6 +118,7 @@ public class DDKudrinLinksHandler implements HttpHandler {
         } while (findLink(id) != null);
 
         dao.upsert(id, url);
+        onCreated.accept(id, url);
         String shortUrl = "http://localhost:" + exchange.getLocalAddress().getPort() + "/" + id;
         sendText(exchange, 201, shortUrl);
     }

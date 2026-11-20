@@ -20,6 +20,8 @@ public class DDKudrinUrlShortenerService implements UrlShortenerService {
     private final Lock lock = new ReentrantLock();
     private Dao<String> linkDao;
     private boolean configurationLocked;
+    private String kafkaBootstrapServers;
+    private DDKudrinKafkaClient kafkaClient;
 
     public DDKudrinUrlShortenerService(int port) throws IOException {
         this.linkDao = new DDKudrinPersistentDao(
@@ -47,6 +49,19 @@ public class DDKudrinUrlShortenerService implements UrlShortenerService {
     }
 
     @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        lock.lock();
+        try {
+            if (configurationLocked) {
+                throw new IllegalStateException("Cannot configure Kafka after start or stop");
+            }
+            kafkaBootstrapServers = Objects.requireNonNull(bootstrapServers);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
     public void start() {
         lock.lock();
         try {
@@ -54,9 +69,18 @@ public class DDKudrinUrlShortenerService implements UrlShortenerService {
                 throw new IllegalStateException("Service already started or stopped");
             }
             configurationLocked = true;
+            DDKudrinLinksHandler linksHandler = new DDKudrinLinksHandler(linkDao, (id, url) -> {
+                if (kafkaClient != null) {
+                    kafkaClient.publish(id, url);
+                }
+            });
+            if (kafkaBootstrapServers != null) {
+                kafkaClient = new DDKudrinKafkaClient(kafkaBootstrapServers, linksHandler);
+                kafkaClient.start();
+            }
             server.createContext(
                 "/v0/links",
-                new DDKudrinAuthMiddleware(new DDKudrinLinksHandler(linkDao), userDao)
+                new DDKudrinAuthMiddleware(linksHandler, userDao)
             );
             server.createContext("/", new DDKudrinRedirectHandler(linkDao));
             server.start();
@@ -70,9 +94,13 @@ public class DDKudrinUrlShortenerService implements UrlShortenerService {
         lock.lock();
         try {
             configurationLocked = true;
-            Dao<String> links = linkDao;
-            try (links; userDao) {
-                server.stop(1);
+            server.stop(1);
+            if (kafkaClient != null) {
+                kafkaClient.stop();
+            }
+            try {
+                linkDao.close();
+                userDao.close();
             } catch (IOException e) {
                 throw new UncheckedIOException("Cannot close service storage", e);
             }
