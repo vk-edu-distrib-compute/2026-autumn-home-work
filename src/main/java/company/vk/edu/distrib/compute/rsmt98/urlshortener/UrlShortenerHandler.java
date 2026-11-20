@@ -5,6 +5,8 @@ import com.sun.net.httpserver.HttpHandler;
 
 import company.vk.edu.distrib.compute.Dao;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -25,12 +27,19 @@ final class UrlShortenerHandler implements HttpHandler {
     private final LinkStore links;
     private final BasicAuthentication auth;
     private final BooleanSupplier available;
+    @Nullable private final KafkaLinkModeration moderation;
 
-    UrlShortenerHandler(int port, Dao<String> links, Dao<String> users, BooleanSupplier available) {
+    UrlShortenerHandler(
+            int port,
+            LinkStore links,
+            Dao<String> users,
+            BooleanSupplier available,
+            @Nullable KafkaLinkModeration moderation) {
         shortLinkPrefix = "http://localhost:" + port + '/';
-        this.links = new LinkStore(links);
+        this.links = links;
         auth = new BasicAuthentication(users);
         this.available = available;
+        this.moderation = moderation;
     }
 
     @Override
@@ -86,7 +95,7 @@ final class UrlShortenerHandler implements HttpHandler {
             throws IOException {
         if (path.length() == LINKS_PATH.length() - 1 && LINKS_PATH.startsWith(path)) {
             return POST_METHOD.equals(exchange.getRequestMethod())
-                    ? new Response(201, shortLinkPrefix + links.create(readBody(exchange)))
+                    ? createLink(exchange)
                     : methodNotAllowed(exchange, POST_METHOD);
         }
         if (path.startsWith(LINKS_PATH)) {
@@ -94,6 +103,15 @@ final class UrlShortenerHandler implements HttpHandler {
             return accessLink(exchange, id);
         }
         return redirectPath ? methodNotAllowed(exchange, GET_METHOD) : new Response(404);
+    }
+
+    private Response createLink(HttpExchange exchange) throws IOException {
+        String longLink = readBody(exchange);
+        String id = links.create(longLink);
+        if (moderation != null) {
+            moderation.created(id, longLink);
+        }
+        return new Response(201, shortLinkPrefix + id);
     }
 
     private Response status(HttpExchange exchange) {
