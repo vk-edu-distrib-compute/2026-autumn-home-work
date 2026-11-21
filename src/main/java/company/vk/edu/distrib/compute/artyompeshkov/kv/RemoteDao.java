@@ -17,7 +17,7 @@ class RemoteDao implements Dao<String> {
     private final String recordUrl;
 
     RemoteDao(int port) {
-        this.recordUrl = "http://localhost:" + port + KVServiceImpl.ENTRY_STR + "?" + KVServiceImpl.ID_STR;
+        this.recordUrl = "http://localhost:" + port + "/v0/entity?id=";
     }
 
     @Override
@@ -35,7 +35,10 @@ class RemoteDao implements Dao<String> {
 
     @Override
     public void delete(String key) throws IOException {
-        checkStatus(sendRequest(createRequest(key).DELETE()), HttpURLConnection.HTTP_ACCEPTED);
+        HttpResponse<byte[]> response = sendRequest(createRequest(key).DELETE());
+        if (response.statusCode() != HttpURLConnection.HTTP_OK) {
+            checkStatus(response, HttpURLConnection.HTTP_ACCEPTED);
+        }
     }
 
     @Override
