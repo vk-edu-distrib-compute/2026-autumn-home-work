@@ -16,14 +16,18 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.NoSuchElementException;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Cloudyy74UrlShortenerService implements UrlShortenerService {
     private static final Logger log = LoggerFactory.getLogger(Cloudyy74UrlShortenerService.class);
 
     private final int port;
     private final HttpServer server;
-    private final Dao<String> linksDao = new Cloudyy74PersistentDao("./out/links.log");
+    private Dao<String> linksDao = new Cloudyy74PersistentDao("./out/links.log");
     private final Dao<String> usersDao = new Cloudyy74PersistentDao("./out/users.log");
+    private final Lock startLock = new ReentrantLock();
+    private boolean wasStarted;
 
     private static final int SHORT_LINK_ID_LENGTH = 10;
     private static final String SHORT_LINK_ID_ALPHABET =
@@ -47,12 +51,37 @@ public class Cloudyy74UrlShortenerService implements UrlShortenerService {
 
     @Override
     public void start() {
-        server.start();
+        startLock.lock();
+        try {
+            wasStarted = true;
+            server.start();
+        } finally {
+            startLock.unlock();
+        }
     }
 
     @Override
     public void stop() {
-        server.stop(1);
+        startLock.lock();
+        try {
+            wasStarted = true;
+            server.stop(1);
+        } finally {
+            startLock.unlock();
+        }
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        startLock.lock();
+        try {
+            if (wasStarted) {
+                throw new IllegalStateException("Cannot replace links Dao after start or stop");
+            }
+            this.linksDao = dao;
+        } finally {
+            startLock.unlock();
+        }
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
