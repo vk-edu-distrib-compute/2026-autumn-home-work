@@ -13,6 +13,7 @@ import com.sun.net.httpserver.HttpExchange;
 
 public final class HttpUtils {
     private static final String BASIC_AUTH_PREFIX = "Basic ";
+
     public static final int AUTH_FIELD_COUNT = 2;
 
     private HttpUtils() {
