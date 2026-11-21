@@ -5,6 +5,7 @@ import company.vk.edu.distrib.compute.Dao;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.NoSuchElementException;
 
 public class DaoImpl implements Dao<String> {
     private final ReentrantLock lock = new ReentrantLock();
@@ -12,7 +13,11 @@ public class DaoImpl implements Dao<String> {
 
     @Override
     public String get(String key) {
-        return values.get(key);
+        String value = values.get(key);
+        if (value == null) {
+            throw new NoSuchElementException();
+        }
+        return value;
     }
 
     @Override
@@ -37,6 +42,6 @@ public class DaoImpl implements Dao<String> {
 
     @Override
     public void close() {
-        /* This DAO is not persistent, it doesn't save any data on close() */
+        //
     }
 }
