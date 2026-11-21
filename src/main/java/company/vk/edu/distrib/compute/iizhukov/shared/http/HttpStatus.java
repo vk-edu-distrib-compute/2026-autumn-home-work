@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers;
+package company.vk.edu.distrib.compute.iizhukov.shared.http;
 
 public enum HttpStatus {
     OK(200),
@@ -7,12 +7,14 @@ public enum HttpStatus {
 
     MOVED_PERMANENTLY(301),
 
+    BAD_REQUEST(400),
     UNAUTHORIZED(401),
     NOT_FOUND(404),
     METHOD_NOT_ALLOWED(405),
     UNPROCESSABLE_CONTENT(422),
 
-    INTERNAL_SERVER_ERROR(500);
+    INTERNAL_SERVER_ERROR(500),
+    SERVICE_UNAVAILABLE(503);
 
     private final int code;
 

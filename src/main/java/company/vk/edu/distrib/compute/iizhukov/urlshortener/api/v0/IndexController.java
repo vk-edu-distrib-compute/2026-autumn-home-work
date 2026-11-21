@@ -1,18 +1,19 @@
 package company.vk.edu.distrib.compute.iizhukov.urlshortener.api.v0;
 
+import java.io.IOException;
 import java.util.NoSuchElementException;
 
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.BaseController;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.HttpStatus;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Request;
-import company.vk.edu.distrib.compute.iizhukov.urlshortener.api.helpers.Response;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.BaseController;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.HttpStatus;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Request;
+import company.vk.edu.distrib.compute.iizhukov.shared.http.Response;
+import company.vk.edu.distrib.compute.iizhukov.urlshortener.db.StorageException;
 import company.vk.edu.distrib.compute.iizhukov.urlshortener.db.dao.LinksDao;
 
-public class IndexController extends BaseController {
-    private final LinksDao dao = LinksDao.create();
-
+public class IndexController extends BaseController<String> {
     public IndexController(int port) {
         super(port);
+        setDao(LinksDao.create());
     }
 
     @Override
@@ -27,12 +28,14 @@ public class IndexController extends BaseController {
         try {
             return Response.builder()
                     .setStatus(HttpStatus.MOVED_PERMANENTLY)
-                    .addHeader("Location", dao.get(key))
+                    .addHeader("Location", dao().get(key))
                     .build();
         } catch (NoSuchElementException e) {
             return Response.builder()
                     .setStatus(HttpStatus.NOT_FOUND)
                     .build();
+        } catch (IOException e) {
+            throw new StorageException("cant read link", e);
         }
     }
 }
