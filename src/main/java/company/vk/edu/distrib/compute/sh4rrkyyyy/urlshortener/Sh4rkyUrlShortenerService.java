@@ -2,6 +2,12 @@ package company.vk.edu.distrib.compute.sh4rrkyyyy.urlshortener;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.ErrorHandler;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.HttpStatus;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.HttpUtils;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.PersistentDao;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.Serializers;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 
 import java.io.IOException;
@@ -30,8 +36,8 @@ public class Sh4rkyUrlShortenerService implements UrlShortenerService {
     private static final Pattern ID_PATTERN = Pattern.compile("[A-Za-z0-9]{10}");
 
     private final HttpServer server;
-    private final DaoString linksDao = new DaoString(LINKS_FILE);
-    private final DaoString usersDao = new DaoString(USERS_FILE);
+    private Dao<String> linksDao = new PersistentDao<>(LINKS_FILE, Serializers.STRING);
+    private final Dao<String> usersDao = new PersistentDao<>(USERS_FILE, Serializers.STRING);
     private final int port;
 
     public Sh4rkyUrlShortenerService(int port) throws IOException {
@@ -54,6 +60,11 @@ public class Sh4rkyUrlShortenerService implements UrlShortenerService {
     @Override
     public void stop() {
         server.stop(1);
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        this.linksDao = dao;
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
