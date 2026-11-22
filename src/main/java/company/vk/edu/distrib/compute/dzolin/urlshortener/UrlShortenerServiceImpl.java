@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -14,6 +16,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 public class UrlShortenerServiceImpl implements UrlShortenerService {
+    private static final Logger LOG = LoggerFactory.getLogger(UrlShortenerServiceImpl.class);
     private static final String GET = "GET";
     private static final String POST = "POST";
     private static final String PUT = "PUT";
@@ -25,6 +28,8 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     private Dao<String> linkDao;
     private final UserAuthentication authentication;
     private final int port;
+    private String kafkaBootstrapServers;
+    private LinkModeration moderation;
 
     UrlShortenerServiceImpl(int port) throws IOException {
         server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -41,6 +46,11 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     @Override
     public void setLinksDao(Dao<String> dao) {
         linkDao = dao;
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        kafkaBootstrapServers = bootstrapServers;
     }
 
     public void getStatus(HttpExchange exchange) throws IOException {
@@ -71,6 +81,9 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
         var linkId = getShortLinkId();
 
         linkDao.upsert(linkId, longLink);
+        if (moderation != null) {
+            moderation.created(linkId, longLink);
+        }
 
         var shortLink = getShortLinkPath(linkId);
         sendResult(exchange, 201, shortLink);
@@ -157,11 +170,21 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
 
     @Override
     public void start() {
+        if (kafkaBootstrapServers != null) {
+            try {
+                moderation = new LinkModeration(kafkaBootstrapServers, linkDao);
+            } catch (RuntimeException exception) {
+                LOG.warn("Could not initialize link moderation", exception);
+            }
+        }
         server.start();
     }
 
     @Override
     public void stop() {
+        if (moderation != null) {
+            moderation.stop();
+        }
         try (authentication) {
             server.stop(1);
         } catch (IOException exception) {
