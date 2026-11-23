@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 
 public class MyUrlShortenerService implements UrlShortenerService {
@@ -31,6 +32,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
     private final Dao<String> users;
     private static final int TWO = 2;
     private static final Logger LOGGER = LoggerFactory.getLogger(MyUrlShortenerService.class);
+    private Optional<MyUrlShortenerServiceModerationProcessor> moderationProcessor;
 
     public MyUrlShortenerService(int port) throws IOException {
         InetSocketAddress addr = new InetSocketAddress(port);
@@ -39,6 +41,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
         Path tempDir = Files.createTempDirectory("sghdjsdfhgfj");
         urls = new PersistentDao(tempDir.resolve("urls.dat"));
         users = new PersistentDao(tempDir.resolve("users.dat"));
+        moderationProcessor = Optional.empty();
 
         addContext("/v0/status", new StatusHandler());
         addContext("/v0/links", new LinksHandler(this));
@@ -52,6 +55,8 @@ public class MyUrlShortenerService implements UrlShortenerService {
             LOGGER.info("Starting MyUrlShortenerService at {}", server.getAddress());
         }
         server.start();
+
+        moderationProcessor.ifPresent(MyUrlShortenerServiceModerationProcessor::start);
     }
 
     @Override
@@ -60,6 +65,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
             LOGGER.info("Stopping MyUrlShortenerService at {}", server.getAddress());
         }
         server.stop(0);
+        moderationProcessor.ifPresent(MyUrlShortenerServiceModerationProcessor::stop);
     }
 
     public String host() {
@@ -109,6 +115,9 @@ public class MyUrlShortenerService implements UrlShortenerService {
 
     public void upsertUrl(String id, String url) throws IOException {
         urls.upsert(id, url);
+        moderationProcessor.ifPresent(p -> {
+            p.sendEvent(id, url);
+        });
     }
 
     public String getLongUrl(String id) throws IOException {
@@ -126,5 +135,10 @@ public class MyUrlShortenerService implements UrlShortenerService {
     @Override
     public void setLinksDao(Dao<String> dao) {
         urls = dao;
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        moderationProcessor = Optional.of(new MyUrlShortenerServiceModerationProcessor(this, bootstrapServers));
     }
 }
