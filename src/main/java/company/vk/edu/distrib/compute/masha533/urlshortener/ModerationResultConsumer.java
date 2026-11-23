@@ -19,6 +19,8 @@ public class ModerationResultConsumer {
     private KafkaConsumer<String, String> moderationConsumer;
     private Thread moderationWorker;
     private final AtomicBoolean moderationRunning = new AtomicBoolean(false);
+    private static final int RESULT_PARTS_COUNT = 3;
+    private static final String REJECTED_RESULT = "false";
 
     public ModerationResultConsumer(Dao<String> linksDao) {
         this.linksDao = linksDao;
@@ -31,8 +33,8 @@ public class ModerationResultConsumer {
             return;
         }
 
-        final var parts = value.split("\n", 3);
-        if (parts.length == 3 && "false".equals(parts[0])) {
+        final var parts = value.split("\n", RESULT_PARTS_COUNT);
+        if (parts.length == RESULT_PARTS_COUNT && REJECTED_RESULT.equals(parts[0])) {
             linksDao.delete(id);
         }
     }

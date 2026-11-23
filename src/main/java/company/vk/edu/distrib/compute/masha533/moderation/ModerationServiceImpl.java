@@ -80,6 +80,15 @@ public class ModerationServiceImpl implements ModerationService {
         return false;
     }
 
+    private ProducerRecord<String, String> createDeadLetterRecord(
+        ConsumerRecord<String, String> record, RuntimeException e) {
+        final var message = new ProducerRecord<>(
+                "links.created.dlt", null, record.key(), record.value(), record.headers()
+        );
+        message.headers().add("error", e.toString().getBytes(StandardCharsets.UTF_8));
+        return message;
+    }
+
     private void consumeLinks() {
         final var bannedWords = loadBannedWords();
         try (var consumer = createConsumer(); var producer = createProducer()) {
@@ -90,12 +99,7 @@ public class ModerationServiceImpl implements ModerationService {
                     try {
                         message = moderate(record, bannedWords);
                     } catch (IllegalArgumentException | DateTimeParseException e) {
-                        message = new ProducerRecord<>(
-                            "links.created.dlt",
-                            null, record.key(),
-                            record.value(),
-                            record.headers());
-                        message.headers().add("error", e.toString().getBytes(StandardCharsets.UTF_8));
+                        message = createDeadLetterRecord(record, e);
                     }
                     producer.send(message).get();
                 }
