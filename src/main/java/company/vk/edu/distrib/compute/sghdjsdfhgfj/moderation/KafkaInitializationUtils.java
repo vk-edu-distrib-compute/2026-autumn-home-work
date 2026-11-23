@@ -27,6 +27,9 @@ public final class KafkaInitializationUtils {
         Properties props = new Properties();
         props.put("bootstrap.servers", bootstrapServers);
         props.put("linger.ms", 1);
+        props.put("delivery.timeout.ms", 2000);
+        props.put("request.timeout.ms", 1000);
+        props.put("max.block.ms", 1000);
         return new KafkaProducer<>(props, new StringSerializer(), new ByteArraySerializer());
     }
 }

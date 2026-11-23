@@ -5,6 +5,7 @@ import company.vk.edu.distrib.compute.moderation.ModerationResultEvent;
 import company.vk.edu.distrib.compute.sghdjsdfhgfj.moderation.KafkaInitializationUtils;
 import company.vk.edu.distrib.compute.sghdjsdfhgfj.moderation.MyModerationService;
 import company.vk.edu.distrib.compute.sghdjsdfhgfj.moderation.SerializationUtils;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -63,14 +64,14 @@ public class MyUrlShortenerServiceModerationProcessor {
         if (consumerThread != null) {
             consumerThread.interrupt();
             try {
-                consumerThread.join(2000);
+                consumerThread.join(1000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }
         moderationSender.shutdownNow();
-        resultConsumer.close();
-        moderationProducer.close();
+        resultConsumer.close(CloseOptions.timeout(Duration.ofMillis(200)));
+        moderationProducer.close(Duration.ofMillis(200));
     }
 
     public void sendEvent(String id, String url) {
