@@ -41,11 +41,16 @@ final class ModerationSettings {
     }
 
     static List<String> bannedWords() throws IOException {
-        InputStream stream = ModerationSettings.class.getClassLoader()
-                .getResourceAsStream("moderation/banned_words.txt");
-        if (stream == null) {
-            throw new IOException("Banned words resource is missing");
+        try (InputStream stream = ModerationSettings.class.getClassLoader()
+                .getResourceAsStream("moderation/banned_words.txt")) {
+            if (stream == null) {
+                throw new IOException("Banned words resource is missing");
+            }
+            return readWords(stream);
         }
+    }
+
+    private static List<String> readWords(InputStream stream) throws IOException {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             return reader.lines().map(String::trim).filter(word -> !word.isEmpty())
                     .map(word -> word.toLowerCase(Locale.ROOT)).toList();

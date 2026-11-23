@@ -6,10 +6,8 @@ import company.vk.edu.distrib.compute.moderation.ModerationService;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import java.io.IOException;
 import java.net.URLDecoder;
@@ -18,7 +16,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -88,8 +85,7 @@ final class KafkaModerationService implements ModerationService {
                 try {
                     for (ConsumerRecord<String, String> record : activeConsumer.poll(POLL_TIMEOUT)) {
                         process(record, producer);
-                        TopicPartition partition = new TopicPartition(record.topic(), record.partition());
-                        activeConsumer.commitSync(Map.of(partition, new OffsetAndMetadata(record.offset() + 1)));
+                        activeConsumer.commitSync();
                     }
                 } catch (WakeupException e) {
                     if (running.get()) {
