@@ -27,6 +27,8 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
     @Nullable private ExecutorService executor;
     @Nullable private Dao<String> links;
     @Nullable private FileDao users;
+    @Nullable private String kafkaBootstrapServers;
+    @Nullable private KafkaLinkModeration moderation;
     private boolean started;
     private boolean stopped;
 
@@ -42,6 +44,19 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
                 throw new IllegalStateException("Links DAO can only be set before service start");
             }
             links = dao;
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        lifecycleLock.lock();
+        try {
+            if (started || stopped) {
+                throw new IllegalStateException("Kafka servers can only be set before service start");
+            }
+            kafkaBootstrapServers = bootstrapServers;
         } finally {
             lifecycleLock.unlock();
         }
@@ -71,6 +86,12 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
                 }
                 FileDao userDao = new FileDao(storage.resolve("users"));
                 users = userDao;
+                String configuredKafka = kafkaBootstrapServers;
+                if (configuredKafka != null) {
+                    KafkaLinkModeration kafkaModeration = new KafkaLinkModeration(configuredKafka, activeLinks);
+                    moderation = kafkaModeration;
+                    kafkaModeration.start();
+                }
                 HttpServer httpServer =
                         HttpServer.create(new InetSocketAddress("localhost", port), 0);
                 server = httpServer;
@@ -80,7 +101,7 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
                 BooleanSupplier finalLinksAvailable = linksAvailable;
                 httpServer.createContext("/", new UrlShortenerHandler(
                         port, activeLinks, userDao,
-                        () -> finalLinksAvailable.getAsBoolean() && userDao.isAvailable()));
+                        () -> finalLinksAvailable.getAsBoolean() && userDao.isAvailable(), moderation));
                 httpServer.start();
             } catch (IOException | RuntimeException e) {
                 closeResources();
@@ -114,6 +135,10 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
         ExecutorService serviceExecutor = executor;
         if (serviceExecutor != null) {
             serviceExecutor.close();
+        }
+        KafkaLinkModeration kafkaModeration = moderation;
+        if (kafkaModeration != null) {
+            kafkaModeration.close();
         }
         Dao<String> linkDao = links;
         if (linkDao != null) {

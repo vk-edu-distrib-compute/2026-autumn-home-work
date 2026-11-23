@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
 import company.vk.edu.distrib.compute.Dao;
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -24,13 +25,16 @@ final class UrlShortenerHandler implements HttpHandler {
     private final LinkManager links;
     private final BasicAuthentication authentication;
     private final BooleanSupplier available;
+    @Nullable private final KafkaLinkModeration moderation;
 
     UrlShortenerHandler(
-            int port, Dao<String> links, Dao<String> users, BooleanSupplier available) {
+            int port, Dao<String> links, Dao<String> users, BooleanSupplier available,
+            @Nullable KafkaLinkModeration moderation) {
         this.port = port;
         this.links = new LinkManager(links);
         this.authentication = new BasicAuthentication(users);
         this.available = available;
+        this.moderation = moderation;
     }
 
     @Override
@@ -77,7 +81,12 @@ final class UrlShortenerHandler implements HttpHandler {
             if (!POST.equals(method)) {
                 return methodNotAllowed(exchange, POST);
             }
-            String id = links.create(readBody(exchange));
+            String target = readBody(exchange);
+            String id = links.create(target);
+            KafkaLinkModeration kafkaModeration = moderation;
+            if (kafkaModeration != null) {
+                kafkaModeration.created(id, target);
+            }
             return new Response(201, "http://localhost:" + port + '/' + id);
         }
         if (path.startsWith(LINKS + '/')) {
