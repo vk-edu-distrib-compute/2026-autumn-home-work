@@ -5,12 +5,18 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.time.Instant;
 
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.miiishenka.kafka.KafkaEventProducer;
+import company.vk.edu.distrib.compute.miiishenka.kafka.Topics;
+import company.vk.edu.distrib.compute.miiishenka.serializer.LinkCreatedEventSerializationUtils;
 import company.vk.edu.distrib.compute.miiishenka.urlshortener.authorization.BasicAuthenticator;
 import company.vk.edu.distrib.compute.miiishenka.http.exception.HttpStatusException;
 import company.vk.edu.distrib.compute.miiishenka.http.exception.UnprocessableContentException;
+import company.vk.edu.distrib.compute.moderation.LinkCreatedEvent;
+import org.apache.kafka.clients.producer.ProducerRecord;
 
 public class LinksController extends BaseUrlShortenerController {
     private static final String ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -19,12 +25,19 @@ public class LinksController extends BaseUrlShortenerController {
     private final Dao<String> linksDao;
     private final BasicAuthenticator basicAuthenticator;
     private final int port;
+    private final KafkaEventProducer producer;
 
-    public LinksController(Dao<String> linksDao, BasicAuthenticator basicAuthenticator, int port) {
+    public LinksController(
+            Dao<String> linksDao,
+            BasicAuthenticator basicAuthenticator,
+            int port,
+            KafkaEventProducer producer
+    ) {
         super();
         this.linksDao = linksDao;
         this.basicAuthenticator = basicAuthenticator;
         this.port = port;
+        this.producer = producer;
     }
 
     @Override
@@ -49,6 +62,7 @@ public class LinksController extends BaseUrlShortenerController {
         String longLink = readLongLink(exchange);
         String shortId = generateShortId();
         linksDao.upsert(shortId, longLink);
+        sendForModeration(shortId, longLink);
         String shortUrl = "http://localhost:%d/%s".formatted(port, shortId);
         exchange.getResponseHeaders().add("Content-Type", "text/html; charset=utf-8");
         exchange.sendResponseHeaders(201, 0);
@@ -101,5 +115,19 @@ public class LinksController extends BaseUrlShortenerController {
             throw new UnprocessableContentException();
         }
         return longLink;
+    }
+
+    private void sendForModeration(String shortId, String longLink) throws IOException {
+        if (producer == null) {
+            return;
+        }
+
+        LinkCreatedEvent event = new LinkCreatedEvent(shortId, longLink, Instant.now());
+        ProducerRecord<String, byte[]> record = new ProducerRecord<>(
+                Topics.LINKS_CREATED_TOPIC,
+                shortId,
+                LinkCreatedEventSerializationUtils.serialize(event)
+        );
+        producer.produce(record);
     }
 }
