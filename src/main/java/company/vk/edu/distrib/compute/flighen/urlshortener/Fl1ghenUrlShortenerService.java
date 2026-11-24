@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpContext;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.flighen.kv.LinksDaoListener;
+import company.vk.edu.distrib.compute.flighen.moderation.FlighenLinkEventProducer;
+import company.vk.edu.distrib.compute.flighen.moderation.FlighenModerationResultConsumer;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 
 import java.io.IOException;
@@ -25,7 +27,11 @@ public class Fl1ghenUrlShortenerService implements UrlShortenerService {
     private final List<LinksDaoListener> linksDaoListeners = new ArrayList<>();
     private final HttpServer server;
     private final Dao<String> usersDao;
+    private final LinkHandler linkHandler;
     private Dao<String> shortLinksDao;
+    private String kafkaBootstrapServers;
+    private FlighenLinkEventProducer linkEventProducer;
+    private FlighenModerationResultConsumer moderationResultConsumer;
 
     private boolean started;
     private boolean stopped;
@@ -56,7 +62,7 @@ public class Fl1ghenUrlShortenerService implements UrlShortenerService {
         );
 
         RedirectHandler redirectHandler = new RedirectHandler(shortLinksDao);
-        LinkHandler linkHandler = new LinkHandler(shortLinksDao, port);
+        linkHandler = new LinkHandler(shortLinksDao, port);
 
         linksDaoListeners.add(redirectHandler);
         linksDaoListeners.add(linkHandler);
@@ -76,6 +82,17 @@ public class Fl1ghenUrlShortenerService implements UrlShortenerService {
 
     @Override
     public void start() {
+        if (kafkaBootstrapServers != null) {
+            try {
+                linkEventProducer = new FlighenLinkEventProducer(kafkaBootstrapServers);
+                linkHandler.setLinkEventProducer(linkEventProducer);
+                moderationResultConsumer = new FlighenModerationResultConsumer(kafkaBootstrapServers, shortLinksDao);
+                moderationResultConsumer.start();
+            } catch (RuntimeException e) {
+                log.error("Failed to start Kafka moderation clients", e);
+            }
+        }
+
         server.start();
         started = true;
     }
@@ -85,6 +102,13 @@ public class Fl1ghenUrlShortenerService implements UrlShortenerService {
         server.stop(1);
 
         executor.shutdown();
+
+        if (linkEventProducer != null) {
+            linkEventProducer.close();
+        }
+        if (moderationResultConsumer != null) {
+            moderationResultConsumer.stop();
+        }
 
         try {
             shortLinksDao.close();
@@ -99,6 +123,15 @@ public class Fl1ghenUrlShortenerService implements UrlShortenerService {
         }
 
         stopped = true;
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (started || stopped) {
+            throw new IllegalStateException();
+        }
+
+        kafkaBootstrapServers = Objects.requireNonNull(bootstrapServers, "Kafka bootstrap servers must not be null");
     }
 
     @Override

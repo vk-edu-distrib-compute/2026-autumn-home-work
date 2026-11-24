@@ -19,9 +19,13 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @SuppressWarnings("PMD.UseConcurrentHashMap") // All map access is guarded by the read/write lock.
 public class KeyListingBytesDao implements KeyListingDao<byte[]> {
+    private static final String FLUSH_ON_STOP_ENV = "KV_FLUSH_ON_STOP";
+
     private final Path filePath;
 
     private final Map<String, byte[]> db;
+    private final boolean flushOnStop;
+    private boolean dirty;
 
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final Lock readLock = lock.readLock();
@@ -29,6 +33,7 @@ public class KeyListingBytesDao implements KeyListingDao<byte[]> {
 
     public KeyListingBytesDao(Path filePath) throws IOException {
         this.filePath = filePath;
+        this.flushOnStop = Boolean.parseBoolean(System.getenv(FLUSH_ON_STOP_ENV));
 
         if (!Files.exists(filePath)) {
             Files.createFile(filePath);
@@ -65,6 +70,12 @@ public class KeyListingBytesDao implements KeyListingDao<byte[]> {
 
         writeLock.lock();
         try {
+            if (flushOnStop) {
+                db.put(key, value);
+                dirty = true;
+                return;
+            }
+
             Map<String, byte[]> updatedDb = new HashMap<>(db);
             updatedDb.put(key, value);
             writeFile(updatedDb);
@@ -84,6 +95,12 @@ public class KeyListingBytesDao implements KeyListingDao<byte[]> {
 
         writeLock.lock();
         try {
+            if (flushOnStop) {
+                db.remove(key);
+                dirty = true;
+                return;
+            }
+
             Map<String, byte[]> updatedDb = new HashMap<>(db);
             updatedDb.remove(key);
             writeFile(updatedDb);
@@ -96,8 +113,20 @@ public class KeyListingBytesDao implements KeyListingDao<byte[]> {
     }
 
     @Override
-    public void close() {
-        // Changes are persisted during upsert and delete.
+    public void close() throws IOException {
+        if (!flushOnStop) {
+            return;
+        }
+
+        writeLock.lock();
+        try {
+            if (dirty) {
+                writeFile(db);
+                dirty = false;
+            }
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Override

@@ -8,8 +8,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -18,14 +20,15 @@ public class FlighenKVService implements KVService {
 
     private final HttpServer server;
     private final Dao<byte[]> dao;
+    private final HttpClient client;
 
     private final ExecutorService executor;
 
-    public FlighenKVService(int port, int threads) throws IOException {
+    public FlighenKVService(int port, int threads, int replicaFactor) throws IOException {
         Path storageDir = Path.of(
-                System.getProperty("java.io.tmpdir"),
-                "fl1ghen-urlshortener",
-                String.valueOf(port)
+            System.getProperty("java.io.tmpdir"),
+            "fl1ghen-urlshortener",
+            String.valueOf(port)
         );
 
         try {
@@ -38,12 +41,23 @@ public class FlighenKVService implements KVService {
         }
 
         dao = new KeyListingBytesDao(
-                storageDir.resolve("kv.db")
+            storageDir.resolve("kv.db")
         );
+
+        client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(1200))
+                .build();
 
         server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/v0/status", new GetStatusHandler());
-        server.createContext("/v0/entity", new EntityHandler(dao));
+        server.createContext(
+            "/v0/entity",
+            new EntityHandler(dao, port, replicaFactor, client, true)
+        );
+        server.createContext(
+            "/v0/internal/entity",
+            new EntityHandler(dao, port, 0, client, false)
+        );
 
         executor = Executors.newFixedThreadPool(threads);
 
@@ -59,6 +73,7 @@ public class FlighenKVService implements KVService {
     public void stop() {
         server.stop(1);
         executor.shutdown();
+        client.close();
         try {
             dao.close();
             log.info("KVService data saved successfully");

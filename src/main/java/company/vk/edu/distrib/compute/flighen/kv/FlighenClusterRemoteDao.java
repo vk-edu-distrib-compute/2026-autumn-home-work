@@ -40,8 +40,8 @@ public class FlighenClusterRemoteDao implements Dao<String> {
     @Override
     public String get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
         String encodedKey = URLEncoder.encode(
-                key,
-                StandardCharsets.UTF_8
+            key,
+            StandardCharsets.UTF_8
         );
 
         int port = determineNodePort(key);
@@ -49,14 +49,14 @@ public class FlighenClusterRemoteDao implements Dao<String> {
         URI uri = URI.create("http://localhost:%d/v0/entity?id=%s".formatted(port, encodedKey));
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(uri)
-                .GET()
-                .build();
+            .uri(uri)
+            .GET()
+            .build();
 
         try {
             HttpResponse<byte[]> response = client.send(
-                    request,
-                    HttpResponse.BodyHandlers.ofByteArray()
+                request,
+                HttpResponse.BodyHandlers.ofByteArray()
             );
 
             switch (response.statusCode()) {
@@ -78,8 +78,8 @@ public class FlighenClusterRemoteDao implements Dao<String> {
     @Override
     public void upsert(String key, String value) throws IllegalArgumentException, IOException {
         String encodedKey = URLEncoder.encode(
-                key,
-                StandardCharsets.UTF_8
+            key,
+            StandardCharsets.UTF_8
         );
 
         int port = determineNodePort(key);
@@ -89,15 +89,15 @@ public class FlighenClusterRemoteDao implements Dao<String> {
         byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(uri)
-                .header("Content-Type", MEDIA_TYPE)
-                .PUT(HttpRequest.BodyPublishers.ofByteArray(valueBytes))
-                .build();
+            .uri(uri)
+            .header("Content-Type", MEDIA_TYPE)
+            .PUT(HttpRequest.BodyPublishers.ofByteArray(valueBytes))
+            .build();
 
         try {
             HttpResponse<Void> response = client.send(
-                    request,
-                    HttpResponse.BodyHandlers.discarding()
+                request,
+                HttpResponse.BodyHandlers.discarding()
             );
 
             switch (response.statusCode()) {
@@ -117,8 +117,8 @@ public class FlighenClusterRemoteDao implements Dao<String> {
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
         String encodedKey = URLEncoder.encode(
-                key,
-                StandardCharsets.UTF_8
+            key,
+            StandardCharsets.UTF_8
         );
 
         int port = determineNodePort(key);
@@ -126,18 +126,18 @@ public class FlighenClusterRemoteDao implements Dao<String> {
         URI uri = URI.create("http://localhost:%d/v0/entity?id=%s".formatted(port, encodedKey));
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(uri)
-                .DELETE()
-                .build();
+            .uri(uri)
+            .DELETE()
+            .build();
 
         try {
             HttpResponse<byte[]> response = client.send(
-                    request,
-                    HttpResponse.BodyHandlers.ofByteArray()
+                request,
+                HttpResponse.BodyHandlers.ofByteArray()
             );
 
             switch (response.statusCode()) {
-                case HttpStatusCodes.ACCEPTED:
+                case HttpStatusCodes.OK, HttpStatusCodes.ACCEPTED:
                     return;
                 case HttpStatusCodes.NOT_FOUND:
                     throw new NoSuchElementException("Key not found: " + key);

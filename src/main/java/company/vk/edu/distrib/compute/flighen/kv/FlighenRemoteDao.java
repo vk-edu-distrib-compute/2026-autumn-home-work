@@ -115,7 +115,7 @@ public class FlighenRemoteDao implements Dao<String> {
             );
 
             switch (response.statusCode()) {
-                case HttpStatusCodes.ACCEPTED:
+                case HttpStatusCodes.OK, HttpStatusCodes.ACCEPTED:
                     return;
                 case HttpStatusCodes.NOT_FOUND:
                     throw new NoSuchElementException("Key not found: " + key);

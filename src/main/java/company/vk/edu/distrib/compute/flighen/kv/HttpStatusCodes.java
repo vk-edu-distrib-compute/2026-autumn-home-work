@@ -8,6 +8,7 @@ final class HttpStatusCodes {
     static final int FORBIDDEN = 403;
     static final int NOT_FOUND = 404;
     static final int UNPROCESSABLE_ENTITY = 422;
+    static final int INTERNAL_SERVER_ERROR = 500;
     static final int SERVICE_UNAVAILABLE = 503;
 
     private HttpStatusCodes() {

@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.flighen.kv.LinksDaoListener;
+import company.vk.edu.distrib.compute.flighen.moderation.FlighenLinkEventProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,12 +31,17 @@ public class LinkHandler implements HttpHandler, LinksDaoListener {
     private static final String CHARSET = "charset";
 
     private Dao<String> dao;
+    private FlighenLinkEventProducer linkEventProducer;
 
     private final int port;
 
     public LinkHandler(Dao<String> dao, int port) {
         this.dao = dao;
         this.port = port;
+    }
+
+    public void setLinkEventProducer(FlighenLinkEventProducer producer) {
+        this.linkEventProducer = producer;
     }
 
     @Override
@@ -197,6 +203,10 @@ public class LinkHandler implements HttpHandler, LinksDaoListener {
                 .add("Content-Type", "%s; charset=%s".formatted(MEDIA_TYPE, ENCODING));
 
         String responseUrl = "http://localhost:" + port + "/" + generatedID;
+
+        if (linkEventProducer != null) {
+            linkEventProducer.send(generatedID, longUrl);
+        }
 
         exchange.sendResponseHeaders(201, responseUrl.length());
         exchange.getResponseBody().write(responseUrl.getBytes(StandardCharsets.UTF_8));
