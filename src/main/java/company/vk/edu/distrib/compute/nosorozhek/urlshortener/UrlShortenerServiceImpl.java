@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.nosorozhek.urlshortener;
 
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.nosorozhek.moderation.KafkaModerationClient;
 import company.vk.edu.distrib.compute.nosorozhek.urlshortener.authentication.AuthenticationMiddleware;
 import company.vk.edu.distrib.compute.nosorozhek.urlshortener.authentication.UserService;
 import company.vk.edu.distrib.compute.nosorozhek.urlshortener.handlers.*;
@@ -13,6 +14,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.util.Objects;
+import java.util.Optional;
 
 public class UrlShortenerServiceImpl implements UrlShortenerService {
     private static final Logger log = LoggerFactory.getLogger(UrlShortenerServiceImpl.class);
@@ -24,6 +26,7 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     private final AuthenticationMiddleware auth;
     private final Dao<String> userDao;
     private Dao<String> urlDao;
+    private Optional<KafkaModerationClient> moderationClient = Optional.empty();
     private boolean startedOrStopped;
 
     public UrlShortenerServiceImpl(Dao<String> urlDao, Dao<String> userDao, int port) throws IOException {
@@ -66,7 +69,18 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     }
 
     @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (startedOrStopped) {
+            throw new IllegalStateException("Kafka bootstrap.servers must be set before start");
+        }
+        KafkaModerationClient moderationClient = new KafkaModerationClient(bootstrapServers, urlShortener);
+        this.moderationClient = Optional.of(moderationClient);
+        urlShortener.setLinkCreatedPublisher(moderationClient);
+    }
+
+    @Override
     public void start() {
+        moderationClient.ifPresent(KafkaModerationClient::start);
         startedOrStopped = true;
         log.info("Started");
         server.start();
@@ -77,6 +91,8 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
         startedOrStopped = true;
         log.info("Stopping");
         server.stop(0);
+
+        moderationClient.ifPresent(KafkaModerationClient::stop);
 
         try {
             urlDao.close();
