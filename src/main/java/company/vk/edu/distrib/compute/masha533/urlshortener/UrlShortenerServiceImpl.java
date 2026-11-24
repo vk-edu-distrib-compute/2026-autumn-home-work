@@ -3,17 +3,24 @@ package company.vk.edu.distrib.compute.masha533.urlshortener;
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.moderation.LinkCreatedEvent;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
-
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.NoSuchElementException;
+import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 public class UrlShortenerServiceImpl implements UrlShortenerService {
     private final HttpServer server;
@@ -21,7 +28,7 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     private Dao<String> linksDao;
     private final Dao<String> usersDao;
     private static final String ID_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    private static final String ID_PATTERN = "[A-Za-z0-9]{10}";
+    static final String ID_PATTERN = "[A-Za-z0-9]{10}";
     private static final String LINKS_PATH_PREFIX = "/v0/links/";
     private static final String LINKS_PATH = "/v0/links";
     private static final int PARTS_COUNT = 2;
@@ -30,18 +37,10 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     private static final String PUT_METHOD = "PUT";
     private static final String DELETE_METHOD = "DELETE";
     private boolean startedOrStopped;
-
-    private boolean isValidLink(String link) {
-        try {
-            URI uri = new URI(link);
-            if (uri.getScheme() == null || uri.getHost() == null) {
-                return false;
-            }
-            return "https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme());
-        } catch (URISyntaxException e) {
-            return false;
-        }
-    }
+    private String kafkaBootstrapServers;
+    private KafkaProducer<String, String> producer;
+    private ExecutorService kafkaSender;
+    private ModerationResultConsumer resultConsumer;
 
     private boolean isAuthorized(HttpExchange exchange) {
         try {
@@ -65,13 +64,19 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
 
     private void handleCreate(HttpExchange exchange) throws IOException {
         final var body = new String(exchange.getRequestBody().readAllBytes());
-        if (!isValidLink(body)) {
+        if (!UrlValidators.isValidLink(body)) {
             exchange.sendResponseHeaders(422, -1);
             exchange.close();
             return;
         }
         final var id = getShortLinkId();
         linksDao.upsert(id, body);
+        if (producer != null) {
+            final var event = new LinkCreatedEvent(id, body, Instant.now());
+            final var value = event.createdAt() + "\n" + event.url();
+            final var record = new ProducerRecord<>("links.created", event.id(), value);
+            kafkaSender.execute(() -> producer.send(record));
+        }
         final var shortLink = "http://localhost:" + port + "/" + id;
         final var response = shortLink.getBytes(StandardCharsets.UTF_8);
 
@@ -114,7 +119,7 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
             return;
         }
         final var body = new String(exchange.getRequestBody().readAllBytes());
-        if (!isValidLink(body)) {
+        if (!UrlValidators.isValidLink(body)) {
             exchange.sendResponseHeaders(422, -1);
             exchange.close();
             return;
@@ -243,6 +248,16 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     @Override
     public void start() {
         startedOrStopped = true;
+        if (kafkaBootstrapServers != null) {
+            Properties properties = new Properties();
+            properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers);
+            properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+            properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+            producer = new KafkaProducer<>(properties);
+            kafkaSender = Executors.newSingleThreadExecutor();
+            resultConsumer = new ModerationResultConsumer(linksDao);
+            resultConsumer.start(kafkaBootstrapServers);
+        }
         server.start();
     }
 
@@ -250,6 +265,21 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     public void stop() {
         startedOrStopped = true;
         server.stop(5);
+        if (resultConsumer != null) {
+            resultConsumer.stop();
+        }
+        var producerToClose = producer;
+        if (producerToClose != null) {
+            try (producerToClose) {
+                kafkaSender.shutdown();
+                if (!kafkaSender.awaitTermination(1, TimeUnit.SECONDS)) {
+                    kafkaSender.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                kafkaSender.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     @Override
@@ -258,5 +288,10 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
             throw new IllegalStateException();
         }
         this.linksDao = dao;
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        this.kafkaBootstrapServers = bootstrapServers;
     }
 }
