@@ -25,6 +25,7 @@ final class LinkShortenerService implements UrlShortenerService {
     private final int port;
     private final HttpServer server;
     private int lifecycleState;
+    private LinkModeration moderation;
 
     LinkShortenerService(int servicePort, Dao<String> linkDao, Dao<String> userDao) throws IOException {
         links = linkDao;
@@ -35,18 +36,35 @@ final class LinkShortenerService implements UrlShortenerService {
     }
 
     @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (lifecycleState != CREATED) {
+            throw new IllegalStateException("Service was already started or stopped");
+        }
+        if (bootstrapServers == null || bootstrapServers.isBlank()) {
+            throw new IllegalArgumentException("Kafka bootstrap servers must not be blank");
+        }
+        moderation = new LinkModeration(bootstrapServers, links);
+    }
+
+    @Override
     public void start() {
         if (lifecycleState != CREATED) {
             throw new IllegalStateException("Service was already started or stopped");
         }
         try {
             server.bind(new InetSocketAddress("localhost", port), 0);
+            if (moderation != null) {
+                moderation.start();
+            }
             server.start();
             lifecycleState = RUNNING;
         } catch (IOException | RuntimeException exception) {
             lifecycleState = STOPPED;
-            server.stop(0);
-            closeDaos(exception);
+            try {
+                closeResources();
+            } catch (RuntimeException cleanupException) {
+                exception.addSuppressed(cleanupException);
+            }
             throw new IllegalStateException("Unable to start service", exception);
         }
     }
@@ -57,22 +75,15 @@ final class LinkShortenerService implements UrlShortenerService {
             throw new IllegalStateException("Service was not started or was already stopped");
         }
         lifecycleState = STOPPED;
-        try {
-            server.stop(0);
-        } finally {
-            closeDaos(null);
-        }
+        closeResources();
     }
 
-    private void closeDaos(Exception original) {
-        try {
-            links.close();
-            users.close();
+    private void closeResources() {
+        LinkModeration activeModeration = moderation;
+        try (users; links; activeModeration) {
+            server.stop(0);
         } catch (IOException exception) {
-            if (original == null) {
-                throw new IllegalStateException("Unable to close DAO", exception);
-            }
-            original.addSuppressed(exception);
+            throw new IllegalStateException("Unable to close DAO", exception);
         }
     }
 
@@ -202,6 +213,9 @@ final class LinkShortenerService implements UrlShortenerService {
                 id = HttpUtils.randomId();
             } while (HttpUtils.find(links, id) != null);
             links.upsert(id, value);
+            if (moderation != null) {
+                moderation.publish(id, value);
+            }
             HttpUtils.text(exchange, 201, "http://localhost:" + port + "/" + id);
         }
 
