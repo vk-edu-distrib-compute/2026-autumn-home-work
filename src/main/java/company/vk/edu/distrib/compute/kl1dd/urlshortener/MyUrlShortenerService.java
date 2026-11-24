@@ -6,10 +6,8 @@ import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 
 import java.io.IOException;
-
-import java.net.URI;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
 import java.util.NoSuchElementException;
 
 public class MyUrlShortenerService implements UrlShortenerService {
@@ -19,16 +17,15 @@ public class MyUrlShortenerService implements UrlShortenerService {
     private static final String POST_METHOD = "POST";
     private static final String LINKS_PATH = "/v0/links/";
     private static final String SLASH_STRING = "/";
-    private static final String HTTP_STRING = "http";
-    private static final String HTTPS_STRING = "https";
     private static final String COLON_SPLITTER = ":";
-    private static final String ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
-    private final SecureRandom random = new SecureRandom();
     private final HttpServer httpServer;
     private Dao<String> linksDao;
     private final AuthService authService;
     private boolean startedOrStopped;
+
+    private String kafkaBootstrapServers;
+    private UrlModerationKafkaClient moderationClient;
 
     public MyUrlShortenerService(HttpServer httpServer) {
         this.httpServer = httpServer;
@@ -74,15 +71,6 @@ public class MyUrlShortenerService implements UrlShortenerService {
         exchange.close();
     }
 
-    private String generateRandomID(int length) {
-        StringBuilder sb = new StringBuilder(length);
-        for (int i = 0; i < length; i++) {
-            int index = random.nextInt(ALPHABET.length());
-            sb.append(ALPHABET.charAt(index));
-        }
-        return sb.toString();
-    }
-
     private void handleStatus(HttpExchange exchange) throws IOException {
         if (!GET_METHOD.equals(exchange.getRequestMethod())) {
             exchange.sendResponseHeaders(405, -1);
@@ -124,14 +112,17 @@ public class MyUrlShortenerService implements UrlShortenerService {
 
     private void handlePost(HttpExchange exchange) throws IOException {
         String linkBefore = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        if (!isValidURL(linkBefore)) {
+        if (!UrlShortenerUtils.isValidURL(linkBefore)) {
             exchange.sendResponseHeaders(422, -1);
             exchange.close();
             return;
         }
 
-        String id = generateRandomID(10);
+        String id = UrlShortenerUtils.generateRandomID(10);
         linksDao.upsert(id, linkBefore);
+        if (moderationClient != null) {
+            moderationClient.sendLinkCreated(id, linkBefore);
+        }
 
         exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
 
@@ -147,7 +138,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
         String reqPath = exchange.getRequestURI().getPath();
         String id = reqPath.substring(LINKS_PATH.length());
 
-        if (!isValidID(id)) {
+        if (!UrlShortenerUtils.isValidID(id)) {
             exchange.sendResponseHeaders(422, -1);
             exchange.close();
             return;
@@ -170,7 +161,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
     private void handlePut(HttpExchange exchange) throws IOException {
         String reqPath = exchange.getRequestURI().getPath();
         String id = reqPath.substring(LINKS_PATH.length());
-        if (!isValidID(id)) {
+        if (!UrlShortenerUtils.isValidID(id)) {
             exchange.sendResponseHeaders(422, -1);
             exchange.close();
             return;
@@ -180,7 +171,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
             linksDao.get(id);
 
             String newLink = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            if (!isValidURL(newLink)) {
+            if (!UrlShortenerUtils.isValidURL(newLink)) {
                 exchange.sendResponseHeaders(422, -1);
                 exchange.close();
                 return;
@@ -200,7 +191,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
         String reqPath = exchange.getRequestURI().getPath();
         String id = reqPath.substring(LINKS_PATH.length());
 
-        if (!isValidID(id)) {
+        if (!UrlShortenerUtils.isValidID(id)) {
             exchange.sendResponseHeaders(422, -1);
             exchange.close();
             return;
@@ -221,7 +212,7 @@ public class MyUrlShortenerService implements UrlShortenerService {
 
         String reqPath = exchange.getRequestURI().getPath();
         String id = reqPath.substring(SLASH_STRING.length());
-        if (!isValidID(id)) {
+        if (!UrlShortenerUtils.isValidID(id)) {
             exchange.sendResponseHeaders(422, -1);
             exchange.close();
             return;
@@ -239,51 +230,44 @@ public class MyUrlShortenerService implements UrlShortenerService {
         }
     }
 
-    private boolean isValidID(String id) {
-        if (id == null || id.length() != 10) {
-            return false;
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (startedOrStopped) {
+            throw new IllegalStateException();
         }
 
-        for (int i = 0; i < 10; i++) {
-            if (!isAlphaNumeric(id.charAt(i))) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private boolean isAlphaNumeric(char current) {
-        return ('A' <= current && current <= 'Z')
-                || ('a' <= current && current <= 'z')
-                || ('0' <= current && current <= '9');
-    }
-
-    private boolean isValidURL(String url) {
-        try {
-            URI tryUri = URI.create(url);
-            String connectionType = tryUri.getScheme();
-            String site = tryUri.getHost();
-
-            if (connectionType == null || site == null) {
-                return false;
-            }
-
-            return HTTP_STRING.equals(connectionType) || HTTPS_STRING.equals(connectionType);
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
+        this.kafkaBootstrapServers = bootstrapServers;
     }
 
     @Override
     public void start() {
         startedOrStopped = true;
+        if (kafkaBootstrapServers != null) {
+            moderationClient = new UrlModerationKafkaClient(kafkaBootstrapServers,
+                                                            httpServer.getAddress().getPort(),
+                                                            id -> {
+                                                                try {
+                                                                    linksDao.delete(id);
+                                                                } catch (IOException e) {
+                                                                    throw new UncheckedIOException(e);
+                                                                }
+                                                            }
+            );
+
+            moderationClient.start();
+        }
+
         httpServer.start();
     }
 
     @Override
     public void stop() {
         startedOrStopped = true;
+
+        if (moderationClient != null) {
+            moderationClient.stop();
+        }
+
         httpServer.stop(STOP_DELAY_SECONDS);
     }
 }
