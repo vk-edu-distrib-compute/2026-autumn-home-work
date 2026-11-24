@@ -23,6 +23,8 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
     private final int port;
     private boolean started;
     private boolean stopped;
+    private String kafkaBootstrapServers;
+    private LinkModeration moderation;
 
     public UrlShortenerServiceImpl(int port) throws IOException {
         Path root = Path.of(System.getProperty("user.home"), ".vk-urlshortener", "vladimir");
@@ -34,6 +36,17 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
     }
 
     @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (started || stopped) {
+            throw new IllegalStateException("Kafka must be configured before start");
+        }
+        if (bootstrapServers == null || bootstrapServers.isBlank()) {
+            throw new IllegalArgumentException("Empty Kafka bootstrap servers");
+        }
+        kafkaBootstrapServers = bootstrapServers;
+    }
+
+    @Override
     public void start() {
         if (started || stopped) {
             throw new IllegalStateException("Service already started or stopped");
@@ -41,8 +54,18 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
         try {
             server = HttpServer.create(new InetSocketAddress("localhost", port), 0);
             server.createContext("/", this::handle);
+
+            if (kafkaBootstrapServers != null) {
+                moderation = new LinkModeration(kafkaBootstrapServers, links, port);
+                linkApi.setModeration(moderation);
+            }
+
             server.start();
             started = true;
+
+            if (moderation != null) {
+                moderation.start();
+            }
         } catch (IOException exception) {
             throw new UncheckedIOException("Could not start server", exception);
         }
@@ -53,6 +76,9 @@ public final class UrlShortenerServiceImpl implements UrlShortenerService {
         stopped = true;
         if (server != null) {
             server.stop(1);
+        }
+        if (moderation != null) {
+            moderation.close();
         }
         try {
             links.close();

@@ -17,10 +17,15 @@ final class UrlLinks {
     private final Dao<String> links;
     private final SecureRandom random = new SecureRandom();
     private final int port;
+    private LinkModeration moderation;
 
     UrlLinks(Dao<String> links, int port) {
         this.links = links;
         this.port = port;
+    }
+
+    void setModeration(LinkModeration moderation) {
+        this.moderation = moderation;
     }
 
     void createLink(HttpExchange exchange) throws IOException {
@@ -40,6 +45,9 @@ final class UrlLinks {
             }
         }
         links.upsert(id, longLink);
+        if (moderation != null) {
+            moderation.created(id, longLink);
+        }
         respond(exchange, 201, "http://localhost:" + port + "/" + id);
     }
 
