@@ -31,18 +31,20 @@ public final class LinkModerationFactory implements ModerationServiceFactory {
     }
 
     private static List<String> readWords() throws IOException {
-        InputStream input = LinkModerationFactory.class.getResourceAsStream("/moderation/banned_words.txt");
-        if (input == null) {
-            throw new IOException("Banned words resource is missing");
-        }
+        try (InputStream input = LinkModerationFactory.class
+            .getResourceAsStream("/moderation/banned_words.txt")) {
+            if (input == null) {
+                throw new IOException("Banned words resource is missing");
+            }
 
-        try (BufferedReader reader = new BufferedReader(
-            new InputStreamReader(input, StandardCharsets.UTF_8))) {
-            return reader.lines()
-                .map(String::strip)
-                .filter(word -> !word.isEmpty())
-                .map(word -> word.toLowerCase(Locale.ROOT))
-                .toList();
+            try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(input, StandardCharsets.UTF_8))) {
+                return reader.lines()
+                    .map(String::strip)
+                    .filter(word -> !word.isEmpty())
+                    .map(word -> word.toLowerCase(Locale.ROOT))
+                    .toList();
+            }
         }
     }
 

@@ -87,13 +87,18 @@ final class LinkModeration implements AutoCloseable {
                 if (!running.get()) {
                     return;
                 }
-                String name = file.getFileName().toString();
-                String id = name.substring(0, name.indexOf('.'));
-                KafkaWorker.send(producer, new ProducerRecord<>(
-                    ModerationEvents.CREATED_TOPIC, id, Files.readAllBytes(file)));
-                Files.delete(file);
+                publishFile(producer, file);
             }
         }
+    }
+
+    private static void publishFile(KafkaProducer<String, byte[]> producer, Path file)
+        throws IOException {
+        String name = file.getFileName().toString();
+        String id = name.substring(0, name.indexOf('.'));
+        KafkaWorker.send(producer, new ProducerRecord<>(
+            ModerationEvents.CREATED_TOPIC, id, Files.readAllBytes(file)));
+        Files.delete(file);
     }
 
     @Override

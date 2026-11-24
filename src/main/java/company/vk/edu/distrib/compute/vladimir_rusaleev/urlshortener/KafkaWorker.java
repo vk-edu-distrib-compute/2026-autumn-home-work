@@ -8,6 +8,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -84,8 +85,8 @@ abstract class KafkaWorker implements AutoCloseable {
 
             onRecord(clients.producer, record);
 
-            Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(
-                partition, new OffsetAndMetadata(record.offset() + 1));
+            Map<TopicPartition, OffsetAndMetadata> offsets = new ConcurrentHashMap<>();
+                offsets.put(partition, new OffsetAndMetadata(record.offset() + 1));
 
             if (transactional) {
                 clients.producer.sendOffsetsToTransaction(offsets, clients.consumer.groupMetadata());
