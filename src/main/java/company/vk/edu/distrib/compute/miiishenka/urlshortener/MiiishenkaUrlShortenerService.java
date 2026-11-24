@@ -8,7 +8,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.miiishenka.kafka.KafkaEventConsumer;
 import company.vk.edu.distrib.compute.miiishenka.http.ControllerHttpHandler;
+import company.vk.edu.distrib.compute.miiishenka.kafka.KafkaEventProducer;
+import company.vk.edu.distrib.compute.miiishenka.kafka.Topics;
+import company.vk.edu.distrib.compute.miiishenka.serializer.ModerationResultEventSerializationUtils;
 import company.vk.edu.distrib.compute.miiishenka.urlshortener.authorization.BasicAuthenticator;
 import company.vk.edu.distrib.compute.miiishenka.urlshortener.controller.BaseUrlShortenerController;
 import company.vk.edu.distrib.compute.miiishenka.urlshortener.controller.LinksController;
@@ -16,13 +20,22 @@ import company.vk.edu.distrib.compute.miiishenka.urlshortener.controller.Redirec
 import company.vk.edu.distrib.compute.miiishenka.urlshortener.controller.StatusController;
 import company.vk.edu.distrib.compute.miiishenka.urlshortener.controller.UserController;
 import company.vk.edu.distrib.compute.miiishenka.dao.PersistentDao;
+import company.vk.edu.distrib.compute.moderation.ModerationResultEvent;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MiiishenkaUrlShortenerService implements UrlShortenerService {
+    private static final String CONSUMER_GROUP = "miiishenka-url";
+    private static final Logger log = LoggerFactory.getLogger(MiiishenkaUrlShortenerService.class);
     private final int port;
     private final HttpServer server;
     private Dao<String> linksDao;
     private Dao<String> usersDao;
+    private String bootstrapServers;
+    private KafkaEventConsumer consumer;
+    private KafkaEventProducer producer;
     private final AtomicBoolean ready = new AtomicBoolean();
     private State state = State.NEW;
 
@@ -51,10 +64,20 @@ public class MiiishenkaUrlShortenerService implements UrlShortenerService {
             throw new UncheckedIOException(e);
         }
 
+        if (bootstrapServers != null) {
+            producer = new KafkaEventProducer(bootstrapServers);
+            consumer = new KafkaEventConsumer(
+                    bootstrapServers,
+                    Topics.LINKS_MODERATED_TOPIC,
+                    CONSUMER_GROUP,
+                    this::process
+            );
+        }
+
         BasicAuthenticator basicAuthenticator = new BasicAuthenticator(usersDao);
         List<BaseUrlShortenerController> controllers = List.of(
                 new StatusController(ready::get),
-                new LinksController(linksDao, basicAuthenticator, port),
+                new LinksController(linksDao, basicAuthenticator, port, producer),
                 new UserController(usersDao),
                 new RedirectController(linksDao)
         );
@@ -64,6 +87,19 @@ public class MiiishenkaUrlShortenerService implements UrlShortenerService {
         server.start();
         state = State.STARTED;
         ready.set(true);
+    }
+
+    private void process(ConsumerRecord<String, byte[]> record) {
+        try {
+            ModerationResultEvent moderationResult = ModerationResultEventSerializationUtils.deserialize(
+                    record.value()
+            );
+            if (!moderationResult.passed()) {
+                linksDao.delete(moderationResult.id());
+            }
+        } catch (IOException e) {
+            log.error("Error while moderation result handling", e);
+        }
     }
 
     @Override
@@ -78,6 +114,10 @@ public class MiiishenkaUrlShortenerService implements UrlShortenerService {
             ready.set(false);
             state = State.STOPPED;
             server.stop(1);
+            if (bootstrapServers != null) {
+                consumer.close();
+                producer.close();
+            }
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to persist DAO data", e);
         }
@@ -89,5 +129,13 @@ public class MiiishenkaUrlShortenerService implements UrlShortenerService {
             throw new IllegalStateException();
         }
         this.linksDao = dao;
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (state != State.NEW) {
+            throw new IllegalStateException();
+        }
+        this.bootstrapServers = bootstrapServers;
     }
 }
