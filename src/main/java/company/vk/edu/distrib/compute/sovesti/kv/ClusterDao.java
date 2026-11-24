@@ -1,16 +1,14 @@
 package company.vk.edu.distrib.compute.sovesti.kv;
 
-import static java.util.stream.Collectors.maxBy;
-
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 import company.vk.edu.distrib.compute.Dao;
 
@@ -45,12 +43,14 @@ final class ClusterDao implements Dao<byte[]> {
     }
 
     private Dao<byte[]> rendezvouz(String key) {
-        return daos.entrySet()
-            .stream()
-            .map(Shard::new)
-            .collect(maxBy(shardComparator(key)))
-            .orElseThrow(() -> new IllegalStateException("DAO cluster is empty"))
-            .dao();
+        return shards(key)
+            .map(Shard::dao)
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("DAO cluster is empty"));
+    }
+
+    Stream<Shard> shards(String key) {
+        return daos.entrySet().stream().map(Shard::new).sorted(shardComparator(key).reversed());
     }
 
     private Comparator<Shard> shardComparator(String key) {
@@ -69,14 +69,6 @@ final class ClusterDao implements Dao<byte[]> {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
-    }
-
-    private record Shard(String key, Dao<byte[]> dao) {
-
-        private Shard(Entry<String, Dao<byte[]>> entry) {
-            this(entry.getKey(), entry.getValue());
-        }
-
     }
 
 }
