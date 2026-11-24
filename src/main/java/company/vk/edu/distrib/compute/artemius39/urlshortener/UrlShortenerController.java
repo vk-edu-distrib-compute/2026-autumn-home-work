@@ -3,10 +3,15 @@ package company.vk.edu.distrib.compute.artemius39.urlshortener;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
+import java.util.Objects;
 
 import com.sun.net.httpserver.HttpServer;
+import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
+@NullMarked
 public class UrlShortenerController implements UrlShortenerService {
     public static final String LINKS_URI = "/v0/links/";
     private static final String ROOT_URI = "/";
@@ -14,6 +19,14 @@ public class UrlShortenerController implements UrlShortenerService {
 
     private final HttpServer server;
     private final UrlShortenerHandler handler;
+    private State state = State.NEW;
+    private @Nullable String kafkaBootstrapServers;
+
+    private enum State {
+        NEW,
+        STARTED,
+        STOPPED
+    }
 
     public UrlShortenerController(InetSocketAddress address, UrlShortenerHandler handler) throws IOException {
         this.handler = handler;
@@ -94,12 +107,44 @@ public class UrlShortenerController implements UrlShortenerService {
     }
 
     @Override
+    public void setLinksDao(Dao<String> dao) {
+        if (state != State.NEW) {
+            throw new IllegalStateException("Links DAO can only be set before start or stop");
+        }
+        Objects.requireNonNull(dao);
+        try {
+            handler.setLinksDao(dao);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (state != State.NEW) {
+            throw new IllegalStateException("Kafka must be configured before start or stop");
+        }
+        kafkaBootstrapServers = Objects.requireNonNull(bootstrapServers);
+    }
+
+    @Override
     public void start() {
+        if (state != State.NEW) {
+            throw new IllegalStateException("Service has already been started or stopped");
+        }
+        if (kafkaBootstrapServers != null) {
+            handler.startModeration(kafkaBootstrapServers, server.getAddress().getPort());
+        }
         server.start();
+        state = State.STARTED;
     }
 
     @Override
     public void stop() {
+        if (state == State.STOPPED) {
+            return;
+        }
+        state = State.STOPPED;
         try {
             server.stop(SERVER_STOP_DELAY);
             handler.close();
