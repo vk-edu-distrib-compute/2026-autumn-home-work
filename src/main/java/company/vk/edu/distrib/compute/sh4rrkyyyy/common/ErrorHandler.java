@@ -1,4 +1,4 @@
-package company.vk.edu.distrib.compute.sh4rrkyyyy.urlshortener;
+package company.vk.edu.distrib.compute.sh4rrkyyyy.common;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -18,11 +18,11 @@ public class ErrorHandler implements HttpHandler {
         try {
             handler.handle(exchange);
         } catch (NoSuchElementException e) {
-            HttpUtils.sendRsp(exchange, HttpStatus.NOT_FOUND, e.getMessage());
+            HttpUtils.sendRsp(exchange, 404, e.getMessage());
         } catch (IllegalArgumentException e) {
-            HttpUtils.sendRsp(exchange, HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
+            HttpUtils.sendRsp(exchange, 422, e.getMessage());
         } catch (Exception e) {
-            HttpUtils.sendRsp(exchange, HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage());
+            HttpUtils.sendRsp(exchange, 500, e.getMessage());
         }
     }
 }
