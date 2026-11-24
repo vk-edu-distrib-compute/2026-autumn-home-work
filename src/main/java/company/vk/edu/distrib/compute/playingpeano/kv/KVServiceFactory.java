@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.playingpeano.kv;
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.kv.KVService;
 import company.vk.edu.distrib.compute.kv.KVServiceTest;
+import company.vk.edu.distrib.compute.kv.ReplicatedKVServiceTest;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -11,6 +12,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 @KVServiceTest
+@ReplicatedKVServiceTest
 public final class KVServiceFactory extends AbstractHttpServiceFactory<KVService> {
     private static final String STORAGE_PROPERTY = "playingpeano.kv.storage";
 
