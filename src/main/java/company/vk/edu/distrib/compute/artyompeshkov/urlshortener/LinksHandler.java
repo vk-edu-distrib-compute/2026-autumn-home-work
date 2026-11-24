@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.artyompeshkov.urlshortener;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.util.function.BiConsumer;
 
 import com.sun.net.httpserver.HttpExchange;
 import company.vk.edu.distrib.compute.Dao;
@@ -19,13 +20,15 @@ class LinksHandler extends BaseHandler {
     private final Dao<String> links;
     private final SimpleAuth auth;
     private final String baseUrl;
+    private final BiConsumer<String, String> onCreated;
     private final LinkIdGenerator idGenerator = new LinkIdGenerator();
 
-    LinksHandler(Dao<String> links, SimpleAuth auth, String baseUrl) {
+    LinksHandler(Dao<String> links, SimpleAuth auth, String baseUrl, BiConsumer<String, String> onCreated) {
         super();
         this.links = links;
         this.auth = auth;
         this.baseUrl = baseUrl;
+        this.onCreated = onCreated;
     }
 
     @Override
@@ -65,6 +68,7 @@ class LinksHandler extends BaseHandler {
         String link = readLink(exchange);
         LinkId id = idGenerator.generate();
         links.upsert(id.value(), link);
+        onCreated.accept(id.value(), link);
         sendText(exchange, HttpURLConnection.HTTP_CREATED, baseUrl + id.value());
     }
 
