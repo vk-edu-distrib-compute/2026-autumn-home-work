@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.annapiatkova.urlshortener;
 import company.vk.edu.distrib.compute.Dao;
 
 import java.io.IOException;
+import java.util.NoSuchElementException;
 
 class Authenticator {
     private final Dao<String> users;
@@ -16,7 +17,11 @@ class Authenticator {
     }
 
     boolean checkCredentials(String username, String password) throws IOException {
-        String expectedPassword = users.get(username);
-        return expectedPassword != null && expectedPassword.equals(password);
+        try {
+            String expectedPassword = users.get(username);
+            return expectedPassword.equals(password);
+        } catch (NoSuchElementException e) {
+            return false;
+        }
     }
 }
