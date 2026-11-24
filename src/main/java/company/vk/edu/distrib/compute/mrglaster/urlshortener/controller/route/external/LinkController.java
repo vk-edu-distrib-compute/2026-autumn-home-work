@@ -6,7 +6,7 @@ import company.vk.edu.distrib.compute.mrglaster.urlshortener.annotation.Route;
 import company.vk.edu.distrib.compute.mrglaster.urlshortener.controller.enums.StatusCode;
 import company.vk.edu.distrib.compute.mrglaster.urlshortener.controller.network.NetworkInteractable;
 import company.vk.edu.distrib.compute.mrglaster.urlshortener.service.ShortLinksGeneratorService;
-
+import java.util.function.BiConsumer;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -19,10 +19,14 @@ public class LinkController implements NetworkInteractable {
 
     private final ShortLinksGeneratorService shortLinksGeneratorService;
     private final Supplier<Dao<String>> urlDaoSupplier;
+    private final BiConsumer<String, String> onLinkCreated;
 
-    public LinkController(Supplier<Dao<String>> urlDaoSupplier, String baseUrl) {
+    public LinkController(Supplier<Dao<String>> urlDaoSupplier,
+                          String baseUrl,
+                          BiConsumer<String, String> onLinkCreated) {
         this.urlDaoSupplier = urlDaoSupplier;
         this.shortLinksGeneratorService = new ShortLinksGeneratorService(baseUrl);
+        this.onLinkCreated = onLinkCreated;
     }
 
     @Route(method = "GET", path = "/v0/links/{id}", requiresAuthorization = true)
@@ -74,7 +78,7 @@ public class LinkController implements NetworkInteractable {
         String shortUrl = shortLinksGeneratorService.generateShortURL(shortId);
         Dao<String> urlDao = urlDaoSupplier.get();
         urlDao.upsert(shortId, longUrl);
-
+        onLinkCreated.accept(shortId, longUrl);
         sendStringResponse(exchange, shortUrl, StatusCode.HTTP_CREATED);
     }
 

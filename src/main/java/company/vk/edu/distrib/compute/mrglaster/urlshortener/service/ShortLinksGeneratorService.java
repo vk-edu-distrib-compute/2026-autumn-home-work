@@ -1,33 +1,30 @@
 package company.vk.edu.distrib.compute.mrglaster.urlshortener.service;
 
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 
 public class ShortLinksGeneratorService {
-    private final URI baseUrl;
-    private static final int MIN_HEX_LENGTH = 1;
+
+    private static final int ID_LENGTH = 10;
+    private static final String ALLOWED_SYMBOLS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static final char[] ALPHABET = ALLOWED_SYMBOLS.toCharArray();
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private final String baseUrl;
 
     public ShortLinksGeneratorService(String baseUrl) {
-        this.baseUrl = URI.create(baseUrl);
+        this.baseUrl = baseUrl;
     }
 
     public String generateLinkID(String longUrl) throws NoSuchAlgorithmException {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] encodedHash = digest.digest(longUrl.getBytes(StandardCharsets.UTF_8));
-        StringBuilder hexString = new StringBuilder();
-        for (byte b : encodedHash) {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == MIN_HEX_LENGTH) {
-                hexString.append('0');
-            }
-            hexString.append(hex);
+        StringBuilder sb = new StringBuilder(ID_LENGTH);
+        for (int i = 0; i < ID_LENGTH; i++) {
+            sb.append(ALPHABET[RANDOM.nextInt(ALPHABET.length)]);
         }
-        return hexString.substring(0, 10);
+        return sb.toString();
     }
 
-    public String generateShortURL(String linkId) throws NoSuchAlgorithmException {
-        return baseUrl.resolve(linkId).toString();
+    public String generateShortURL(String shortId) {
+        return baseUrl + "/" + shortId;
     }
 }

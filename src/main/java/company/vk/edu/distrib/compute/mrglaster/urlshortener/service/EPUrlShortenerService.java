@@ -9,7 +9,9 @@ import company.vk.edu.distrib.compute.mrglaster.urlshortener.controller.route.in
 import company.vk.edu.distrib.compute.mrglaster.urlshortener.dao.PersistentDao;
 import company.vk.edu.distrib.compute.mrglaster.urlshortener.exception.DaoCreationException;
 import company.vk.edu.distrib.compute.mrglaster.urlshortener.exception.DataSavingException;
+import company.vk.edu.distrib.compute.mrglaster.urlshortener.kafka.KafkaLinkModeration;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -24,14 +26,16 @@ public class EPUrlShortenerService implements UrlShortenerService {
     private final HttpServer httpServer;
     private final Dao<String> userDao;
     private final ReentrantLock urlDaoLock = new ReentrantLock();
+
     private Dao<String> urlDao;
     private boolean started;
 
+    @Nullable private String kafkaBootstrapServers;
+    @Nullable private KafkaLinkModeration moderation;
+
     public EPUrlShortenerService(int port) throws IOException {
         this.httpServer = HttpServer.create(new InetSocketAddress(port), 0);
-
         final String baseUrl = "http://127.0.0.1:" + port;
-
         this.userDao = new PersistentDao<>(USERS_STORAGE_FILE, PersistentDao.stringSerializer());
         this.started = false;
 
@@ -39,9 +43,30 @@ public class EPUrlShortenerService implements UrlShortenerService {
 
         ControllerManager routingManager = new ControllerManager(authService);
         routingManager.addController(new StatusController());
-        routingManager.addController(new LinkController(this::getOrCreateUrlDao, baseUrl));
+        routingManager.addController(new LinkController(
+                this::getOrCreateUrlDao,
+                baseUrl,
+                (id, url) -> {
+                    KafkaLinkModeration m = this.moderation;
+                    if (m != null) {
+                        m.created(id, url);
+                    }
+                }));
         routingManager.addController(new UserController(userDao));
         routingManager.register(httpServer);
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        urlDaoLock.lock();
+        try {
+            if (started) {
+                throw new IllegalStateException("Kafka servers can only be set before start");
+            }
+            this.kafkaBootstrapServers = bootstrapServers;
+        } finally {
+            urlDaoLock.unlock();
+        }
     }
 
     private Dao<String> getOrCreateUrlDao() {
@@ -60,21 +85,36 @@ public class EPUrlShortenerService implements UrlShortenerService {
 
     @Override
     public void start() {
-        getOrCreateUrlDao();
-        started = true;
-        httpServer.start();
+        urlDaoLock.lock();
+        try {
+            String bootstrap = kafkaBootstrapServers;
+            if (bootstrap != null) {
+                moderation = new KafkaLinkModeration(bootstrap, this::getOrCreateUrlDao);
+                moderation.start();
+            }
+            started = true;
+            httpServer.start();
+        } finally {
+            urlDaoLock.unlock();
+        }
     }
 
     @Override
     public void stop() {
         urlDaoLock.lock();
         try {
-            userDao.close();
-            if (urlDao != null) {
-                urlDao.close();
+            KafkaLinkModeration m = moderation;
+            if (m != null) {
+                m.close();
             }
-        } catch (Exception e) {
-            throw new DataSavingException("Unable to save data to files", e);
+            try {
+                userDao.close();
+                if (urlDao != null) {
+                    urlDao.close();
+                }
+            } catch (Exception e) {
+                throw new DataSavingException("Unable to save data to files", e);
+            }
         } finally {
             urlDaoLock.unlock();
             httpServer.stop(SHUTDOWN_DELAY);

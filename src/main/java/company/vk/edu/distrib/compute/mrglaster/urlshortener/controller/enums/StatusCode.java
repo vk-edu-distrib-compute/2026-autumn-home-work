@@ -9,6 +9,7 @@ public enum StatusCode {
     HTTP_ACCEPTED(202),
     HTTP_UNAUTHORIZED(401),
     HTTP_CREATED(201),
+    HTTP_SERVICE_UNAVAILABLE(503),
     HTTP_MOVED_PERMANENTLY(301);
 
     private final int statusCode;
