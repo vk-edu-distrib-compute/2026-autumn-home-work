@@ -1,6 +1,7 @@
 package company.vk.edu.distrib.compute.nixxx11.urlshortener;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
@@ -16,7 +17,9 @@ import company.vk.edu.distrib.compute.nixxx11.urlshortener.http.AbstractService;
 import company.vk.edu.distrib.compute.nixxx11.urlshortener.http.Handler;
 import company.vk.edu.distrib.compute.nixxx11.urlshortener.http.LogWrapper;
 import company.vk.edu.distrib.compute.nixxx11.urlshortener.http.Response;
+import company.vk.edu.distrib.compute.nixxx11.urlshortener.moderation.ModerationSystem;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
+import org.jspecify.annotations.Nullable;
 
 import static java.net.HttpURLConnection.HTTP_ACCEPTED;
 import static java.net.HttpURLConnection.HTTP_CREATED;
@@ -50,7 +53,10 @@ public class UrlShortenerServiceImpl extends AbstractService implements UrlShort
   private static final String LINKS_BASE_PATH = "/v0/links/";
   private static final String REDIRECT_BASE_PATH = "/";
 
+  private static final String KAFKA_GROUP_ID = "urlshortener";
+
   private Dao<String> linksDao;
+  private @Nullable ModerationSystem moderationSystem;
   private final UrlShortenerAuthSystem authSystem;
   private final String host;
   private final Random random = new Random();
@@ -70,6 +76,19 @@ public class UrlShortenerServiceImpl extends AbstractService implements UrlShort
   @Override
   public void setLinksDao(final Dao<String> dao) {
     this.linksDao = dao;
+  }
+
+  @Override
+  public void setKafkaBootstrapServers(final String bootstrapServers) {
+    this.moderationSystem = new ModerationSystem(bootstrapServers, KAFKA_GROUP_ID, this::deleteLink);
+  }
+
+  private void deleteLink(final String key) {
+    try {
+      linksDao.delete(key);
+    } catch (final IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 
   @Override
@@ -97,6 +116,25 @@ public class UrlShortenerServiceImpl extends AbstractService implements UrlShort
     );
   }
 
+  @Override
+  public void start() {
+    super.start();
+    if (moderationSystem != null) {
+      moderationSystem.start();
+    }
+  }
+
+  @Override
+  public void stop() {
+    try {
+      super.stop();
+    } finally {
+      if (moderationSystem != null) {
+        moderationSystem.stop();
+      }
+    }
+  }
+
   private Response status(final Request ignored1, final String ignored2) {
     return new Response.Basic(HTTP_OK, "OK");
   }
@@ -108,6 +146,9 @@ public class UrlShortenerServiceImpl extends AbstractService implements UrlShort
 
     final String id = randomId();
     linksDao.upsert(id, content);
+    if (moderationSystem != null) {
+      moderationSystem.linkCreated(id, content);
+    }
 
     return new Response.Basic(HTTP_CREATED, host + '/' + id);
   }
@@ -210,7 +251,7 @@ public class UrlShortenerServiceImpl extends AbstractService implements UrlShort
     return ID_PATTERN.matcher(id).matches();
   }
 
-  private static boolean isValidLink(final String link) {
+  public static boolean isValidLink(final String link) {
     try {
       final URI uri = new URI(link);
       return uri.isAbsolute() && uri.getScheme() != null && ALLOWED_SCHEMAS.contains(uri.getScheme());
