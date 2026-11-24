@@ -5,8 +5,10 @@ import java.io.IOException;
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.kv.KVService;
 import company.vk.edu.distrib.compute.kv.KVServiceTest;
+import company.vk.edu.distrib.compute.kv.ReplicatedKVServiceTest;
 
 @KVServiceTest
+@ReplicatedKVServiceTest
 public class DDKudrinKVServiceFactory extends AbstractHttpServiceFactory<KVService> {
 
     @Override
