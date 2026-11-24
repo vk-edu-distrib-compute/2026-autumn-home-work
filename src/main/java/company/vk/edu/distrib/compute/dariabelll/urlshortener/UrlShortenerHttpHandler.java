@@ -2,8 +2,12 @@ package company.vk.edu.distrib.compute.dariabelll.urlshortener;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.moderation.LinkCreatedEvent;
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ThreadLocalRandom;
@@ -41,18 +45,23 @@ public class UrlShortenerHttpHandler implements HttpHandler {
     private static final String ALPHA_NUMERIC_ALPHABET =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
+    private static final String URL_ACCESSIBLE_CHECK_KEY = "222222222222222";
+
     private final int port;
-    private final JournaledDao urlDao;
+    private final Dao<String> urlDao;
     private final JournaledDao userDao;
     private final UrlShortenerAuthentication authentication;
+    private final @Nullable UrlShortenerModeration moderation;
 
     public UrlShortenerHttpHandler(
             int port,
-            JournaledDao urlDao,
-            JournaledDao userDao) {
+            Dao<String> urlDao,
+            JournaledDao userDao,
+            @Nullable UrlShortenerModeration moderation) {
         this.port = port;
         this.urlDao = urlDao;
         this.userDao = userDao;
+        this.moderation = moderation;
         authentication = new UrlShortenerAuthentication(userDao);
     }
 
@@ -138,7 +147,7 @@ public class UrlShortenerHttpHandler implements HttpHandler {
     }
 
     private void handleGetStatus(HttpExchange exchange) throws IOException {
-        int status = urlDao.isStorageAccessible() && userDao.isStorageAccessible()
+        int status = isUrlStorageAccessible() && userDao.isStorageAccessible()
                 ? HTTP_OK
                 : HTTP_SERVICE_UNAVAILABLE;
         sendEmptyResponse(exchange, status);
@@ -186,6 +195,9 @@ public class UrlShortenerHttpHandler implements HttpHandler {
 
         String id = generateUniqueId();
         urlDao.upsert(id, longLink);
+        if (moderation != null) {
+            moderation.enqueue(new LinkCreatedEvent(id, longLink, Instant.now()));
+        }
         String shortLink = "http://localhost:" + port + "/" + id;
         sendTextResponse(exchange, HTTP_CREATED, shortLink);
     }
@@ -231,6 +243,17 @@ public class UrlShortenerHttpHandler implements HttpHandler {
         sendEmptyResponse(exchange, HTTP_ACCEPTED);
     }
 
+    private boolean isUrlStorageAccessible() {
+        try {
+            urlDao.get(URL_ACCESSIBLE_CHECK_KEY);
+            return true;
+        } catch (NoSuchElementException e) {
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     private static boolean rejectInvalidId(HttpExchange exchange, String id) throws IOException {
         if (!RequestValidators.isInvalidId(id)) {
             return false;
@@ -262,7 +285,7 @@ public class UrlShortenerHttpHandler implements HttpHandler {
         return METHOD_GET.equals(method) && extractRedirectId(path) != null;
     }
 
-    private String generateUniqueId() {
+    private String generateUniqueId() throws IOException {
         StringBuilder idBuilder = new StringBuilder(RequestValidators.ID_SIZE);
         ThreadLocalRandom random = ThreadLocalRandom.current();
         while (true) {

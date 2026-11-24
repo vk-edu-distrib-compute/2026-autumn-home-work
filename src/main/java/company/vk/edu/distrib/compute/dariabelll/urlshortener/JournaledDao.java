@@ -25,6 +25,7 @@ public class JournaledDao implements Dao<String> {
     private static final String DELETE_OPERATION = "D";
 
     private final Path filePath;
+    private final Path directory;
     private final Map<String, String> entries;
     private final RandomAccessFile journal;
     private final ReentrantLock writeLock = new ReentrantLock();
@@ -32,9 +33,14 @@ public class JournaledDao implements Dao<String> {
 
     public JournaledDao(Path path) throws IOException {
         filePath = path.toAbsolutePath();
+        Path parent = filePath.getParent();
+        if (parent == null) {
+            throw new IllegalArgumentException("Journal path must have a parent directory: " + filePath);
+        }
+        directory = parent;
         entries = new ConcurrentHashMap<>();
 
-        Files.createDirectories(filePath.getParent());
+        Files.createDirectories(directory);
         journal = new RandomAccessFile(filePath.toFile(), "rw");
         try {
             load();
@@ -163,7 +169,7 @@ public class JournaledDao implements Dao<String> {
 
     private void save() throws IOException {
         Path tempFile = Files.createTempFile(
-                filePath.getParent(),
+                directory,
                 "journal-",
                 ".tmp");
         try {
@@ -182,7 +188,6 @@ public class JournaledDao implements Dao<String> {
     public boolean isStorageAccessible() {
         writeLock.lock();
         try {
-            Path directory = filePath.getParent();
             return !journalFailed
                     && journal.getChannel().isOpen()
                     && Files.isDirectory(directory)
