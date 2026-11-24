@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.tomovalex.urlshortener;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.tomovalex.moderation.ModerationClient;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -24,6 +25,8 @@ public class UrlShortenerService implements company.vk.edu.distrib.compute.urlsh
     private final HttpServer server;
     private Dao<String> linksDao;
     private final BasicAuthentication authentication;
+    private String kafkaBootstrapServers;
+    private ModerationClient moderation;
     private boolean started;
     private boolean stopped;
 
@@ -40,6 +43,13 @@ public class UrlShortenerService implements company.vk.edu.distrib.compute.urlsh
 
     @Override
     public void start() {
+        if (started || stopped) {
+            throw new IllegalStateException();
+        }
+        if (kafkaBootstrapServers != null) {
+            moderation = new ModerationClient(kafkaBootstrapServers, linksDao);
+            moderation.start();
+        }
         server.start();
         started = true;
     }
@@ -48,6 +58,9 @@ public class UrlShortenerService implements company.vk.edu.distrib.compute.urlsh
     public void stop() {
         stopped = true;
         server.stop(1);
+        if (moderation != null) {
+            moderation.stop();
+        }
         try {
             linksDao.close();
         } catch (IOException e) {
@@ -61,6 +74,14 @@ public class UrlShortenerService implements company.vk.edu.distrib.compute.urlsh
             throw new IllegalStateException();
         }
         linksDao = Objects.requireNonNull(dao);
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (started || stopped) {
+            throw new IllegalStateException();
+        }
+        kafkaBootstrapServers = Objects.requireNonNull(bootstrapServers);
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
@@ -121,6 +142,9 @@ public class UrlShortenerService implements company.vk.edu.distrib.compute.urlsh
 
         String id = generateId();
         linksDao.upsert(id, url);
+        if (moderation != null) {
+            moderation.sendCreated(id, url);
+        }
         sendResponse(exchange, 201, LinkUtils.createShortLink(port, id));
     }
 

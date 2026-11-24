@@ -11,9 +11,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.NoSuchElementException;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ByteDao implements Dao<byte[]> {
     private final Path directory;
+    private final ReentrantLock lock = new ReentrantLock();
 
     public ByteDao(Path directory) throws IOException {
         this.directory = directory;
@@ -23,10 +25,13 @@ public class ByteDao implements Dao<byte[]> {
     @Override
     public byte[] get(String key) throws IOException {
         Path file = generatePathForKey(key);
+        lock.lock();
         try {
             return Files.readAllBytes(file);
         } catch (NoSuchFileException e) {
             throw new NoSuchElementException(key, e);
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -36,12 +41,23 @@ public class ByteDao implements Dao<byte[]> {
         if (value == null) {
             throw new IllegalArgumentException();
         }
-        Files.write(file, value);
+        lock.lock();
+        try {
+            Files.write(file, value);
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
     public void delete(String key) throws IOException {
-        Files.deleteIfExists(generatePathForKey(key));
+        Path file = generatePathForKey(key);
+        lock.lock();
+        try {
+            Files.deleteIfExists(file);
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
