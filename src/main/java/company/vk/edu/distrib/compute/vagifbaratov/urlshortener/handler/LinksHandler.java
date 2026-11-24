@@ -11,15 +11,22 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
+import java.util.function.BiConsumer;
 
 public class LinksHandler implements HttpHandler {
     private static final Logger log = LoggerFactory.getLogger(LinksHandler.class);
     private final int port;
     private final Dao<String> dao;
+    private final BiConsumer<String, String> onLinkCreated;
 
     public LinksHandler(int port, Dao<String> dao) {
+        this(port, dao, (id, url) -> { });
+    }
+
+    public LinksHandler(int port, Dao<String> dao, BiConsumer<String, String> onLinkCreated) {
         this.port = port;
         this.dao = dao;
+        this.onLinkCreated = onLinkCreated;
     }
 
     @Override
@@ -87,6 +94,8 @@ public class LinksHandler implements HttpHandler {
 
         dao.upsert(id, body);
         final var responseBody = "http://localhost:%d/%s".formatted(port, id);
+
+        onLinkCreated.accept(id, body);
 
         writeTextBodyWithStatusCode(exchange, 201, responseBody);
     }

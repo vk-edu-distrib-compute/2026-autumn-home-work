@@ -97,4 +97,3 @@ public final class RemoteDao implements Dao<String> {
         return URI.create(path + encodedKey);
     }
 }
-

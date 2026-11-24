@@ -3,11 +3,13 @@ package company.vk.edu.distrib.compute.vagifbaratov.kv;
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.kv.KVService;
 import company.vk.edu.distrib.compute.kv.KVServiceTest;
+import company.vk.edu.distrib.compute.kv.ReplicatedKVServiceTest;
 
 import java.io.IOException;
 import java.nio.file.Path;
 
 @KVServiceTest
+@ReplicatedKVServiceTest
 public class KVServiceFactory extends AbstractHttpServiceFactory<KVService> {
     private static final Path DATA_DIRECTORY = Path.of(
             System.getProperty("java.io.tmpdir"), "vbaratov-kv"

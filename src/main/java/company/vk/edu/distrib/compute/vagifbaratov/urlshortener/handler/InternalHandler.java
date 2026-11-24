@@ -12,6 +12,7 @@ import java.util.Objects;
 public class InternalHandler implements HttpHandler {
     private static final Logger log = LoggerFactory.getLogger(InternalHandler.class);
     private final Dao<String> credentialsDao;
+    private static final int CREDENTIALS_LENGTH = 2;
 
     public InternalHandler(Dao<String> dao) {
         this.credentialsDao = dao;
@@ -26,7 +27,11 @@ public class InternalHandler implements HttpHandler {
         if (!Objects.equals(contentType, "text/html; charset=utf-8")) {
             throw new IllegalArgumentException("Invalid content type: " + contentType);
         }
+
         final var credentials = body.split(":", 2);
+        if (credentials.length != CREDENTIALS_LENGTH) {
+            throw new IllegalArgumentException("Invalid credentials.");
+        }
 
         credentialsDao.upsert(credentials[0], credentials[1]);
 

@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.vagifbaratov.urlshortener;
 
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.vagifbaratov.moderation.LinkModerationClient;
 import company.vk.edu.distrib.compute.vagifbaratov.urlshortener.handler.*;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 import org.slf4j.Logger;
@@ -19,6 +20,8 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     private Dao<String> linksDao;
     private final Dao<String> credentialsDao;
     private State state = State.NEW;
+    private String kafkaBootstrapServers;
+    private LinkModerationClient moderationClient;
 
     private enum State {
         NEW, STARTED, STOPPED
@@ -50,22 +53,38 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     }
 
     @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (state != State.NEW) {
+            throw new IllegalStateException("Cannot configure Kafka after start or stop");
+        }
+        kafkaBootstrapServers = Objects.requireNonNull(bootstrapServers, "bootstrapServers");
+    }
+
+    @Override
     public void start() {
         if (state != State.NEW) {
             throw new IllegalStateException("Service was already started or was stopped");
+        }
+
+        if (kafkaBootstrapServers != null) {
+            moderationClient = new LinkModerationClient(kafkaBootstrapServers, linksDao);
+            moderationClient.start();
         }
 
         server.createContext(
                 "/v0/status",
                 new ErrorHandler(new StatusHandler()));
 
+        var linksHandler = new LinksHandler(
+            server.getAddress().getPort(),
+            linksDao,
+            moderationClient == null ? (id, url) -> { } : moderationClient::linkCreated
+        );
+
         server.createContext(
                 "/v0/links",
                 new ErrorHandler(
-                        new BasicAuthHandler(
-                                new LinksHandler(server.getAddress().getPort(), linksDao),
-                                credentialsDao
-                        )
+                        new BasicAuthHandler(linksHandler, credentialsDao)
                 )
         );
 
@@ -87,6 +106,9 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
         }
         server.stop(1);
         state = State.STOPPED;
+        if (moderationClient != null) {
+            moderationClient.close();
+        }
         try {
             linksDao.close();
         } catch (IOException e) {
