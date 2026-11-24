@@ -2,6 +2,13 @@ package company.vk.edu.distrib.compute.sh4rrkyyyy.urlshortener;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.ErrorHandler;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.HttpStatus;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.HttpUtils;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.PersistentDao;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.common.Serializers;
+import company.vk.edu.distrib.compute.sh4rrkyyyy.moderation.LinkModeration;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 
 import java.io.IOException;
@@ -9,6 +16,8 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
 public class Sh4rkyUrlShortenerService implements UrlShortenerService {
@@ -30,9 +39,11 @@ public class Sh4rkyUrlShortenerService implements UrlShortenerService {
     private static final Pattern ID_PATTERN = Pattern.compile("[A-Za-z0-9]{10}");
 
     private final HttpServer server;
-    private final DaoString linksDao = new DaoString(LINKS_FILE);
-    private final DaoString usersDao = new DaoString(USERS_FILE);
+    private Dao<String> linksDao = new PersistentDao<>(LINKS_FILE, Serializers.STRING);
+    private final Dao<String> usersDao = new PersistentDao<>(USERS_FILE, Serializers.STRING);
     private final int port;
+    private final ExecutorService requests = Executors.newSingleThreadExecutor();
+    private LinkModeration moderation;
 
     public Sh4rkyUrlShortenerService(int port) throws IOException {
         this.port = port;
@@ -48,12 +59,32 @@ public class Sh4rkyUrlShortenerService implements UrlShortenerService {
     @Override
     public void start() {
         server.start();
-
+        if (moderation != null) {
+            moderation.start();
+        }
     }
 
     @Override
     public void stop() {
         server.stop(1);
+        if (moderation != null) {
+            moderation.stop();
+        }
+        requests.shutdownNow();
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        this.linksDao = dao;
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (requests.isShutdown()) {
+            throw new IllegalStateException("Set Kafka bootstrap servers before start");
+        }
+        server.setExecutor(requests);
+        moderation = new LinkModeration(bootstrapServers, requests, () -> linksDao);
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
@@ -109,6 +140,9 @@ public class Sh4rkyUrlShortenerService implements UrlShortenerService {
         }
         String shortId = generateShortId();
         linksDao.upsert(shortId, longLink);
+        if (moderation != null) {
+            moderation.linkCreated(shortId, longLink);
+        }
         final var shortLink = SHORT_LINK_FORMAT.formatted(port, shortId);
         HttpUtils.sendRsp(exchange, HttpStatus.CREATED, shortLink);
     }
