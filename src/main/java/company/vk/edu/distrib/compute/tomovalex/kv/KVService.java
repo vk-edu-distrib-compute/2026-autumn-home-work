@@ -10,32 +10,57 @@ import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.NoSuchElementException;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
-    private static final String STATUS_PATH = "/v0/status";
-    private static final String ENTITY_PATH = "/v0/entity";
     private static final String GET = "GET";
     private static final String PUT = "PUT";
     private static final String DELETE = "DELETE";
+    private static final String STATUS_PATH = "/v0/status";
+    private static final String ENTITY_PATH = "/v0/entity";
     private static final int THREADS_COUNT = 8;
 
     private final HttpServer server;
     private final Dao<byte[]> dao;
     private final ExecutorService executor;
+    private final ExecutorService clusterExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    private final int replicationFactor;
+    private final ReplicaSelector replicaSelector;
+    private final ReplicationCoordinator coordinator;
 
     public KVService(int port, Dao<byte[]> dao) throws IOException {
         this(port, dao, false);
     }
 
     public KVService(int port, Dao<byte[]> dao, boolean multithreaded) throws IOException {
+        this(port, dao, multithreaded, 1, port);
+    }
+
+    public KVService(int port, Dao<byte[]> dao, boolean multithreaded,
+                     int replicationFactor, int... ports) throws IOException {
+        this.replicaSelector = new ReplicaSelector(ports);
+        if (!replicaSelector.getPorts().contains(port)) {
+            throw new IllegalArgumentException("Local port is missing from cluster: " + port);
+        }
+        if (replicationFactor < 1 || replicationFactor > replicaSelector.getPorts().size()) {
+            throw new IllegalArgumentException("Invalid replication factor: " + replicationFactor);
+        }
+        this.replicationFactor = replicationFactor;
         this.dao = dao;
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         this.executor = Executors.newFixedThreadPool(multithreaded ? THREADS_COUNT : 1);
-        server.setExecutor(executor);
+        this.coordinator = new ReplicationCoordinator(port, dao);
+        server.setExecutor(command -> {
+            if (System.getProperty("CLUSTER") != null || replicaSelector.getPorts().size() > 1) {
+                clusterExecutor.execute(command);
+            } else {
+                executor.execute(command);
+            }
+        });
         server.createContext("/", this::handleRequest);
     }
 
@@ -46,8 +71,10 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
 
     @Override
     public void stop() {
-        server.stop(1);
+        server.stop(0);
         executor.close();
+        clusterExecutor.close();
+        coordinator.close();
         try {
             dao.close();
         } catch (IOException e) {
@@ -70,15 +97,19 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
 
     private void handleEntity(HttpExchange exchange) throws IOException {
         try {
-            String id = getId(exchange);
+            String id = getParameter(exchange, "id");
             if (id == null || id.isEmpty()) {
                 sendEmptyResponse(exchange, 400);
                 return;
             }
-
-            handleEntityMethod(exchange, id);
-        } catch (NoSuchElementException e) {
-            sendEmptyResponse(exchange, 404);
+            List<Integer> replicas = getReplicas(id);
+            String ackParameter = getParameter(exchange, "ack");
+            int ack = ackParameter == null ? 1 : Integer.parseInt(ackParameter);
+            if (ack < 1 || ack > replicas.size()) {
+                sendEmptyResponse(exchange, 400);
+                return;
+            }
+            handleEntityMethod(exchange, id, replicas, ack);
         } catch (IllegalArgumentException e) {
             sendEmptyResponse(exchange, 400);
         } catch (IOException e) {
@@ -86,22 +117,39 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
         }
     }
 
-    private void handleEntityMethod(HttpExchange exchange, String id) throws IOException {
-        switch (exchange.getRequestMethod()) {
-            case GET -> sendResponse(exchange, dao.get(id));
-            case PUT -> {
-                dao.upsert(id, exchange.getRequestBody().readAllBytes());
-                sendEmptyResponse(exchange, 201);
-            }
-            case DELETE -> {
-                dao.delete(id);
-                sendEmptyResponse(exchange, 202);
-            }
-            default -> sendEmptyResponse(exchange, 405);
+    private List<Integer> getReplicas(String id) {
+        String cluster = System.getProperty("CLUSTER");
+        if (cluster == null) {
+            return replicaSelector.selectReplicas(id, replicationFactor);
+        }
+        int[] ports = Arrays.stream(cluster.split(",", -1)).map(String::trim).mapToInt(Integer::parseInt).toArray();
+        ReplicaSelector selector = new ReplicaSelector(ports);
+        return selector.selectReplicas(id, selector.getPorts().size());
+    }
+
+    private void handleEntityMethod(HttpExchange exchange, String id, List<Integer> replicas, int ack)
+        throws IOException {
+        String method = exchange.getRequestMethod();
+        if (!GET.equals(method) && !PUT.equals(method) && !DELETE.equals(method)) {
+            sendEmptyResponse(exchange, 405);
+            return;
+        }
+        byte[] body = PUT.equals(method) ? exchange.getRequestBody().readAllBytes() : new byte[0];
+        ReplicationCoordinator.Response response;
+        String replicaHeader = exchange.getRequestHeaders().getFirst(ReplicationCoordinator.REPLICA_HEADER);
+        if (Objects.equals(replicaHeader, "true")) {
+            response = coordinator.executeLocal(method, id, body);
+        } else {
+            response = coordinator.execute(method, id, body, replicas, ack);
+        }
+        if (GET.equals(method) && response.status() == 200) {
+            sendResponse(exchange, response.body());
+        } else {
+            sendEmptyResponse(exchange, response.status());
         }
     }
 
-    private static String getId(HttpExchange exchange) {
+    private static String getParameter(HttpExchange exchange, String parameterName) {
         String query = exchange.getRequestURI().getRawQuery();
         if (query == null) {
             return null;
@@ -109,7 +157,7 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
         for (String parameter : query.split("&")) {
             String[] parts = parameter.split("=", 2);
             String name = URLDecoder.decode(parts[0], StandardCharsets.UTF_8);
-            if (Objects.equals(name, "id")) {
+            if (Objects.equals(name, parameterName)) {
                 return parts.length == 2 ? URLDecoder.decode(parts[1], StandardCharsets.UTF_8) : "";
             }
         }
