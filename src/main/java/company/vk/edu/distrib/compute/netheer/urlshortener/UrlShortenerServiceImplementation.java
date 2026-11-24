@@ -1,27 +1,40 @@
+
 package company.vk.edu.distrib.compute.netheer.urlshortener;
 
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.netheer.moderation.LinkModeration;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class UrlShortenerServiceImplementation implements UrlShortenerService {
     private static final int STOP_DELAY_SECONDS = 1;
 
-    private final Dao<String> linksDao;
+    private Dao<String> linksDao;
     private final Dao<String> usersDao;
     private final HttpServer server;
+    private final UrlShortenerHandlers handlers;
+    private final Lock lifecycleLock = new ReentrantLock();
 
-    public UrlShortenerServiceImplementation(int port, Dao<String> linksDao, Dao<String> usersDao)
-            throws IOException {
+    private @Nullable LinkModeration moderation;
+    private boolean configurationLocked;
+
+    public UrlShortenerServiceImplementation(
+            int port,
+            Dao<String> linksDao,
+            Dao<String> usersDao
+    ) throws IOException {
         this.linksDao = linksDao;
         this.usersDao = usersDao;
 
         UrlShortenerAuth auth = new UrlShortenerAuth(usersDao);
-        UrlShortenerHandlers handlers = new UrlShortenerHandlers(port, linksDao, auth);
+        this.handlers = new UrlShortenerHandlers(port, linksDao, auth);
 
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/v0/status", handlers::handleStatus);
@@ -31,16 +44,68 @@ public class UrlShortenerServiceImplementation implements UrlShortenerService {
     }
 
     @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        lifecycleLock.lock();
+        try {
+            if (configurationLocked) {
+                throw new IllegalStateException("Kafka configuration can't be changed after service start or stop");
+            }
+            LinkModeration configuredModeration = new LinkModeration(bootstrapServers, handlers::deleteStoredLink);
+            moderation = configuredModeration;
+            handlers.setModeration(configuredModeration);
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        lifecycleLock.lock();
+        try {
+            if (configurationLocked) {
+                throw new IllegalStateException(
+                        "Links DAO can't be changed after service start"
+                );
+            }
+
+            linksDao = dao;
+            handlers.setLinksDao(dao);
+        } finally {
+            lifecycleLock.unlock();
+        }
+    }
+
+    @Override
     public void start() {
-        server.start();
+        lifecycleLock.lock();
+        try {
+            server.start();
+            configurationLocked = true;
+            if (moderation != null) {
+                moderation.start();
+            }
+        } finally {
+            lifecycleLock.unlock();
+        }
     }
 
     @Override
     public void stop() {
-        try (linksDao; usersDao) {
-            server.stop(STOP_DELAY_SECONDS);
-        } catch (IOException exception) {
-            throw new UncheckedIOException(exception);
+        lifecycleLock.lock();
+        try {
+            configurationLocked = true;
+            Dao<String> currentLinksDao = linksDao;
+
+            try (currentLinksDao; usersDao) {
+                server.stop(STOP_DELAY_SECONDS);
+                if (moderation != null) {
+                    moderation.stop();
+                }
+            } catch (IOException exception) {
+                throw new UncheckedIOException(exception);
+            }
+        } finally {
+            lifecycleLock.unlock();
         }
     }
 }
