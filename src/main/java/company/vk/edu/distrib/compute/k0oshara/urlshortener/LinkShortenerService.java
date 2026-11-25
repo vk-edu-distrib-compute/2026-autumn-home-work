@@ -20,7 +20,7 @@ final class LinkShortenerService implements UrlShortenerService {
     private static final int CREATED = 0;
     private static final int RUNNING = 1;
     private static final int STOPPED = 2;
-    private final Dao<String> links;
+    private Dao<String> links;
     private final Dao<String> users;
     private final int port;
     private final HttpServer server;
@@ -32,6 +32,23 @@ final class LinkShortenerService implements UrlShortenerService {
         port = servicePort;
         server = HttpServer.create();
         server.createContext("/", new Handler());
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        if (lifecycleState != CREATED) {
+            throw new IllegalStateException("Service was already started or stopped");
+        }
+        Objects.requireNonNull(dao);
+        Dao<String> previous = links;
+        links = dao;
+        if (previous != dao) {
+            try {
+                previous.close();
+            } catch (IOException exception) {
+                throw new IllegalStateException("Unable to close DAO", exception);
+            }
+        }
     }
 
     @Override
