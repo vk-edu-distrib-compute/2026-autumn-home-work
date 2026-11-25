@@ -15,16 +15,42 @@ public final class UrlShortenerHttpService implements UrlShortenerService {
 
     private final int port;
     private final HttpServer server;
-    private final Dao<String> links;
+    private final LinkRequests linkRequests;
+    private final LinkModeration moderation;
     private final Dao<String> users;
+    private Dao<String> links;
     private boolean started;
+    private boolean daoFixed;
 
     public UrlShortenerHttpService(int port, Dao<String> links, Dao<String> users) throws IOException {
         this.port = port;
         this.links = links;
         this.users = users;
+        moderation = new LinkModeration(links);
+        linkRequests = new LinkRequests(port, links, moderation);
         server = HttpServer.create();
-        server.createContext("/", new UrlShortenerHandler(port, links, users));
+        server.createContext("/", new UrlShortenerHandler(linkRequests, users));
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        if (daoFixed) {
+            throw new IllegalStateException("Links dao cannot be changed after start or stop");
+        }
+        if (links != dao) {
+            closeDao(links);
+        }
+        links = dao;
+        linkRequests.use(dao);
+        moderation.use(dao);
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (daoFixed) {
+            throw new IllegalStateException("Kafka cannot be changed after start or stop");
+        }
+        moderation.servers(bootstrapServers);
     }
 
     @Override
@@ -32,10 +58,14 @@ public final class UrlShortenerHttpService implements UrlShortenerService {
         if (started) {
             throw new IllegalStateException("Service is already started");
         }
+        daoFixed = true;
+        moderation.seal();
+        moderation.open();
         try {
             server.bind(new InetSocketAddress("localhost", port), 0);
             server.start();
         } catch (IOException ex) {
+            moderation.close();
             throw new IllegalStateException("Failed to start URL shortener", ex);
         }
         started = true;
@@ -44,11 +74,14 @@ public final class UrlShortenerHttpService implements UrlShortenerService {
 
     @Override
     public void stop() {
+        daoFixed = true;
+        moderation.seal();
         try {
             if (started) {
                 server.stop(5);
             }
         } finally {
+            moderation.close();
             closeDao(links);
             closeDao(users);
             started = false;

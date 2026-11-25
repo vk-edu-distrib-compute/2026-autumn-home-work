@@ -14,9 +14,9 @@ final class UrlShortenerHandler implements HttpHandler {
     private final BasicAuthenticator authenticator;
     private final LinkRequests links;
 
-    UrlShortenerHandler(int port, Dao<String> links, Dao<String> users) {
+    UrlShortenerHandler(LinkRequests links, Dao<String> users) {
         authenticator = new BasicAuthenticator(users);
-        this.links = new LinkRequests(port, links);
+        this.links = links;
     }
 
     @Override
