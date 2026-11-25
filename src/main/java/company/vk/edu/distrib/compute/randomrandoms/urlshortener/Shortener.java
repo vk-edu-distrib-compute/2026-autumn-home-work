@@ -3,24 +3,40 @@ package company.vk.edu.distrib.compute.randomrandoms.urlshortener;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.moderation.LinkCreatedEvent;
+import company.vk.edu.distrib.compute.moderation.ModerationResultEvent;
+import company.vk.edu.distrib.compute.randomrandoms.kv.RamDao;
+import company.vk.edu.distrib.compute.randomrandoms.moderation.ModUtils;
+import company.vk.edu.distrib.compute.randomrandoms.util.MethodConstants;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 
 import java.io.IOException;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public class Service implements UrlShortenerService {
+import static company.vk.edu.distrib.compute.randomrandoms.util.HandlerConstants.codeAndText;
+import static company.vk.edu.distrib.compute.randomrandoms.util.HandlerConstants.justCode;
+
+public class Shortener implements UrlShortenerService {
     private final HttpServer server;
-    private final Dao<String> dao = new Dao<>();
-    private final Dao<String> auth = new Dao<>();
+    private Dao<String> links;
+    private final RamDao<String> auth = new RamDao<>();
     private final Random rand;
+    private String bs;
+    private KafkaProducer<String, String> producer;
+    private KafkaConsumer<String, String> consumer;
+    private final AtomicBoolean fin = new AtomicBoolean(true);
+    private Thread thd;
     int port;
-
-    private static final String POST = "POST";
-    private static final String GET = "GET";
-    private static final String PUT = "PUT";
-    private static final String DELETE = "DELETE";
 
     private final HttpHandler health = exc -> {
         if (!Objects.equals(exc.getRequestMethod(), "GET")) {
@@ -38,7 +54,7 @@ public class Service implements UrlShortenerService {
         }
         var path = exc.getRequestURI().getPath();
         if (path.length() < linksPrefix.length()) {
-            if (!POST.equals(exc.getRequestMethod())) {
+            if (!MethodConstants.POST.equals(exc.getRequestMethod())) {
                 justCode(422).handle(exc);
                 return;
             }
@@ -51,19 +67,16 @@ public class Service implements UrlShortenerService {
             while (true) {
                 newId = generateId();
                 try {
-                    dao.get(newId);
+                    links.get(newId);
                 } catch (NoSuchElementException e) {
-                    dao.upsert(newId, link);
+                    links.upsert(newId, link);
                     break;
                 }
             }
             var shortLink = "http://localhost:%d/%s".formatted(port, newId);
-            exc.getResponseHeaders().add("Content-Type", "text/html; charset=utf-8");
-            exc.sendResponseHeaders(201, shortLink.getBytes(StandardCharsets.UTF_8).length);
-            exc.getResponseBody().write(shortLink.getBytes());
-            exc.getResponseBody().close();
+            postLce(newId, link);
+            codeAndText(201, shortLink.getBytes(StandardCharsets.UTF_8)).handle(exc);
             exc.close();
-            return;
         }
         var id = path.substring("/v0/links/".length());
         if (!validId(id)) {
@@ -71,34 +84,31 @@ public class Service implements UrlShortenerService {
             return;
         }
         String origin = "";
-        if (!DELETE.equals(exc.getRequestMethod())) {
+        if (!MethodConstants.DELETE.equals(exc.getRequestMethod())) {
             try {
-                origin = dao.get(id);
+                origin = links.get(id);
             } catch (NoSuchElementException e) {
                 justCode(404).handle(exc);
                 return;
             }
         }
-        if (GET.equals(exc.getRequestMethod())) {
-            exc.getResponseHeaders().add("Content-Type", "text/html; charset=utf-8");
-            exc.sendResponseHeaders(200, origin.getBytes(StandardCharsets.UTF_8).length);
-            exc.getResponseBody().write(origin.getBytes());
-            exc.getResponseBody().close();
-            exc.close();
+        if (MethodConstants.GET.equals(exc.getRequestMethod())) {
+            codeAndText(200, origin.getBytes(StandardCharsets.UTF_8)).handle(exc);
             return;
         }
-        if (PUT.equals(exc.getRequestMethod())) {
+        if (MethodConstants.PUT.equals(exc.getRequestMethod())) {
             String newOrigin = new String(exc.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             if (!validLink(newOrigin)) {
                 justCode(422).handle(exc);
                 return;
             }
-            dao.upsert(id, newOrigin);
+            links.upsert(id, newOrigin);
+            postLce(id, newOrigin);
             justCode(200).handle(exc);
             return;
         }
-        if (DELETE.equals(exc.getRequestMethod())) {
-            dao.delete(id);
+        if (MethodConstants.DELETE.equals(exc.getRequestMethod())) {
+            links.delete(id);
             justCode(202).handle(exc);
             return;
         }
@@ -106,7 +116,7 @@ public class Service implements UrlShortenerService {
     };
 
     private final HttpHandler redirect = exc -> {
-        if (!GET.equals(exc.getRequestMethod())) {
+        if (!MethodConstants.GET.equals(exc.getRequestMethod())) {
             justCode(422).handle(exc);
             return;
         }
@@ -117,7 +127,7 @@ public class Service implements UrlShortenerService {
         }
         String link;
         try {
-            link = dao.get(id);
+            link = links.get(id);
         } catch (NoSuchElementException e) {
             justCode(404).handle(exc);
             return;
@@ -128,7 +138,7 @@ public class Service implements UrlShortenerService {
     };
 
     private final HttpHandler internalUsers = exc -> {
-        if (!POST.equals(exc.getRequestMethod())) {
+        if (!MethodConstants.POST.equals(exc.getRequestMethod())) {
             justCode(422).handle(exc);
             return;
         }
@@ -145,7 +155,7 @@ public class Service implements UrlShortenerService {
     private record Creds(String uname, String pass) {
     }
 
-    public Service(int port) throws IOException {
+    public Shortener(int port) throws IOException {
         server = HttpServer.create();
         server.bind(new InetSocketAddress("localhost", port), 0);
         server.createContext("/v0/status", health);
@@ -153,17 +163,94 @@ public class Service implements UrlShortenerService {
         server.createContext("/internal/users", internalUsers);
         server.createContext("/", redirect);
         rand = new Random();
+        links = new RamDao<>();
         this.port = port;
+    }
+
+    private void postLce(String id, String url) {
+        if (bs == null) {
+            return;
+        }
+        producer
+                .send(new ProducerRecord<>(
+                                ModUtils.TopicConstants.LINKS_CREATED,
+                                id,
+                                ModUtils.serializeLce(new LinkCreatedEvent(id, url, Instant.now()))
+                        ),
+                        (meta, e) -> {
+                        }
+                );
+    }
+
+    private void loop() {
+        consumer.subscribe(Collections.singleton(ModUtils.TopicConstants.LINKS_MODERATED));
+        while (!fin.get()) {
+            ConsumerRecords<String, String> crs;
+            crs = consumer.poll(Duration.ofSeconds(1));
+            for (var cr : crs) {
+                ModerationResultEvent mre;
+                try {
+                    mre = ModUtils.deserializeMre(cr.value()).orElseThrow();
+                } catch (NoSuchElementException e) {
+                    continue;
+                }
+                if (mre.passed()) {
+                    continue;
+                }
+                try {
+                    links.delete(mre.id());
+                } catch (IOException e) {
+                    throw new IllegalStateException("faylovaya sistema sdohla!", e);
+                }
+            }
+        }
+        consumer.close();
+        producer.close();
     }
 
     @Override
     public void start() {
+        if (bs != null) {
+            producer = ModUtils.getProducer(bs);
+            consumer = ModUtils.getConsumer(bs, "shortener");
+        }
         server.start();
+        fin.set(false);
+        if (bs != null) {
+            thd = Thread.ofVirtual().start(this::loop);
+        }
     }
 
     @Override
     public void stop() {
+        if (fin.get()) {
+            throw new IllegalStateException("stopped already");
+        }
+        fin.set(true);
         server.stop(1);
+        if (bs != null) {
+            try {
+                thd.join(Duration.ofSeconds(1));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        if (!fin.get()) {
+            throw new IllegalStateException();
+        }
+        links = dao;
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        if (!fin.get()) {
+            throw new IllegalStateException("started already");
+        }
+        bs = bootstrapServers;
     }
 
     private String generateId() {
@@ -186,14 +273,14 @@ public class Service implements UrlShortenerService {
         return ans.toString();
     }
 
-    private boolean validId(String id) {
+    private Boolean validId(String id) {
         return id.length() == 10 && id.chars().allMatch(c -> (c >= '0' && c <= '9')
                 || (c >= 'a' && c <= 'z')
                 || (c >= 'A' && c <= 'Z')
         );
     }
 
-    private boolean validLink(String link) {
+    private Boolean validLink(String link) {
         try {
             new URI(link).toURL();
             return true;
@@ -225,17 +312,12 @@ public class Service implements UrlShortenerService {
     }
 
     private boolean checkAuth(HttpExchange exc) throws IOException {
-        var authHeaders = exc.getRequestHeaders().get("Authorization");
-        if (authHeaders == null) {
-            justCode(401).handle(exc);
-            return false;
-        }
-        var hdr = authHeaders.getFirst();
+        var hdr = exc.getRequestHeaders().get("Authorization").getFirst();
         Creds creds;
         try {
             creds = parseAuthHeader(hdr).orElseThrow();
         } catch (NoSuchElementException e) {
-            justCode(401).handle(exc);
+            justCode(422).handle(exc);
             return false;
         }
         boolean authOk;
@@ -248,12 +330,5 @@ public class Service implements UrlShortenerService {
             justCode(401).handle(exc);
         }
         return authOk;
-    }
-
-    private HttpHandler justCode(int code) {
-        return exc -> {
-            exc.sendResponseHeaders(code, 0);
-            exc.close();
-        };
     }
 }
