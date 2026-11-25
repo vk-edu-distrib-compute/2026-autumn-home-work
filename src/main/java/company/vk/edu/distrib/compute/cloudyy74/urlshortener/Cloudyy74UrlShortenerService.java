@@ -5,30 +5,29 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.NoSuchElementException;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Cloudyy74UrlShortenerService implements UrlShortenerService {
     private static final Logger log = LoggerFactory.getLogger(Cloudyy74UrlShortenerService.class);
 
     private final int port;
     private final HttpServer server;
-    private final Dao<String> linksDao = new Cloudyy74PersistentDao("./out/links.log");
+    private Dao<String> linksDao = new Cloudyy74PersistentDao("./out/links.log");
     private final Dao<String> usersDao = new Cloudyy74PersistentDao("./out/users.log");
-
-    private static final int SHORT_LINK_ID_LENGTH = 10;
-    private static final String SHORT_LINK_ID_ALPHABET =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    private static final SecureRandom RANDOM = new SecureRandom();
+    private final Lock startLock = new ReentrantLock();
+    private boolean wasStarted;
+    private @Nullable String kafkaBootstrapServers;
+    private @Nullable Cloudyy74ModerationClient moderation;
 
     private static final String CONTENT_TYPE_TEXT = "text/html; charset=utf-8";
     private static final String GET_METHOD = "GET";
@@ -47,12 +46,61 @@ public class Cloudyy74UrlShortenerService implements UrlShortenerService {
 
     @Override
     public void start() {
-        server.start();
+        startLock.lock();
+        try {
+            wasStarted = true;
+            if (kafkaBootstrapServers != null) {
+                try {
+                    moderation = new Cloudyy74ModerationClient(kafkaBootstrapServers, linksDao);
+                    moderation.start();
+                } catch (RuntimeException e) {
+                    log.error("Failed to start Kafka client", e);
+                }
+            }
+            server.start();
+        } finally {
+            startLock.unlock();
+        }
     }
 
     @Override
     public void stop() {
-        server.stop(1);
+        startLock.lock();
+        try {
+            wasStarted = true;
+            server.stop(1);
+            if (moderation != null) {
+                moderation.close();
+            }
+        } finally {
+            startLock.unlock();
+        }
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        startLock.lock();
+        try {
+            if (wasStarted) {
+                throw new IllegalStateException("Cannot replace links Dao after start or stop");
+            }
+            this.linksDao = dao;
+        } finally {
+            startLock.unlock();
+        }
+    }
+
+    @Override
+    public void setKafkaBootstrapServers(String bootstrapServers) {
+        startLock.lock();
+        try {
+            if (wasStarted) {
+                throw new IllegalStateException("Cannot replace Kafka servers after start or stop");
+            }
+            kafkaBootstrapServers = bootstrapServers;
+        } finally {
+            startLock.unlock();
+        }
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
@@ -70,10 +118,13 @@ public class Cloudyy74UrlShortenerService implements UrlShortenerService {
         }
 
         final var longLink = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        validateLink(longLink);
+        Cloudyy74LinkUtils.validateLink(longLink);
 
-        final var id = generateShortLinkId();
+        final var id = Cloudyy74LinkUtils.generateShortLinkId();
         linksDao.upsert(id, longLink);
+        if (moderation != null) {
+            moderation.publish(id, longLink);
+        }
 
         final var shortLink = "http://localhost:%d/%s".formatted(port, id);
         sendText(exchange, 201, shortLink);
@@ -82,7 +133,7 @@ public class Cloudyy74UrlShortenerService implements UrlShortenerService {
     private void handleLinks(HttpExchange exchange) throws IOException {
         final var path = exchange.getRequestURI().getPath();
         final var id = path.substring("/v0/links/".length());
-        validateId(id);
+        Cloudyy74LinkUtils.validateId(id);
 
         switch (exchange.getRequestMethod()) {
             case GET_METHOD -> getLink(exchange, id);
@@ -99,7 +150,7 @@ public class Cloudyy74UrlShortenerService implements UrlShortenerService {
 
     private void updateLink(HttpExchange exchange, String id) throws IOException {
         final var newLink = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        validateLink(newLink);
+        Cloudyy74LinkUtils.validateLink(newLink);
 
         // check that the record exists
         linksDao.get(id);
@@ -121,7 +172,7 @@ public class Cloudyy74UrlShortenerService implements UrlShortenerService {
 
         final var path = exchange.getRequestURI().getPath();
         final var id = path.substring(1);
-        validateId(id);
+        Cloudyy74LinkUtils.validateId(id);
 
         final var longLink = linksDao.get(id);
 
@@ -134,34 +185,6 @@ public class Cloudyy74UrlShortenerService implements UrlShortenerService {
         exchange.getResponseHeaders().add("Content-Type", CONTENT_TYPE_TEXT);
         exchange.sendResponseHeaders(statusCode, body.length);
         exchange.getResponseBody().write(body);
-    }
-
-    private static String generateShortLinkId() {
-        StringBuilder sb = new StringBuilder(SHORT_LINK_ID_LENGTH);
-
-        for (int i = 0; i < SHORT_LINK_ID_LENGTH; i++) {
-            int randomIndex = RANDOM.nextInt(SHORT_LINK_ID_ALPHABET.length());
-            sb.append(SHORT_LINK_ID_ALPHABET.charAt(randomIndex));
-        }
-
-        return sb.toString();
-    }
-
-    private static void validateId(String id) {
-        if (!id.matches("[A-Za-z0-9]{10}")) {
-            throw new IllegalArgumentException("Invalid ID");
-        }
-    }
-
-    private static void validateLink(String link) {
-        try {
-            URI uri = new URI(link);
-            if (!uri.isAbsolute() || uri.getHost() == null) {
-                throw new IllegalArgumentException("Invalid link");
-            }
-        } catch (URISyntaxException e) {
-            throw new IllegalArgumentException("Invalid link", e);
-        }
     }
 
     private record ErrorHandler(HttpHandler delegate) implements HttpHandler {
