@@ -1,9 +1,12 @@
 package company.vk.edu.distrib.compute.robert.urlshortener.api.v0;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.NoSuchElementException;
+import java.util.function.Consumer;
 
 import company.vk.edu.distrib.compute.Dao;
+import company.vk.edu.distrib.compute.moderation.LinkCreatedEvent;
 import company.vk.edu.distrib.compute.robert.api.models.AbstractHandler;
 import company.vk.edu.distrib.compute.robert.api.models.HttpStatus;
 import company.vk.edu.distrib.compute.robert.api.models.Request;
@@ -15,24 +18,43 @@ import company.vk.edu.distrib.compute.robert.urlshortener.utils.IdGeneratorUtils
 public class LinksHandler extends AbstractHandler {
     public static final String PATH = "/v0/links";
     private static final int ID_LENGTH = 10;
-    
+
     private final Dao<String> dao;
     private final int port;
+    private final Consumer<LinkCreatedEvent> onLinkCreated;
 
     public LinksHandler(Dao<String> inputDao, int inputPort) {
+        this(
+            inputDao,
+            inputPort,
+            event -> { }
+        );
+    }
+
+    public LinksHandler(
+        Dao<String> inputDao,
+        int inputPort,
+        Consumer<LinkCreatedEvent> inputOnLinkCreated
+    ) {
         super();
         dao = inputDao;
         port = inputPort;
+        onLinkCreated = inputOnLinkCreated;
     }
-    
-    // * `POST /v0/links` -- создать короткую ссылку для заданной в теле, `Content-Type: text/html; charset=utf-8`. 
-    // Возвращает `201 Created`, `Content-Type: text/html; charset=utf-8` и короткую ссылку в теле. 
+
+    // * `POST /v0/links` -- создать короткую ссылку для заданной в теле, `Content-Type: text/html; charset=utf-8`.
+    // Возвращает `201 Created`, `Content-Type: text/html; charset=utf-8` и короткую ссылку в теле.
     @Override
     public Response post(Request request) throws NoSuchElementException, IOException {
         String longLink = request.bodyAsString();
-       
+
         String id = createId();
         dao.upsert(id, longLink);
+        onLinkCreated.accept(new LinkCreatedEvent(
+            id,
+            longLink,
+            Instant.now()
+        ));
 
         return Response.builder()
             .setStatus(HttpStatus.CREATED.code())

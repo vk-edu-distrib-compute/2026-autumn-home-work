@@ -14,6 +14,7 @@ import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.robert.api.models.AuthHandler;
 import company.vk.edu.distrib.compute.robert.api.v0.StatusHandler;
 import company.vk.edu.distrib.compute.robert.dao.RobertDao;
+import company.vk.edu.distrib.compute.robert.moderation.RobertModerationClient;
 import company.vk.edu.distrib.compute.robert.urlshortener.api.v0.ForwardHandler;
 import company.vk.edu.distrib.compute.robert.urlshortener.api.v0.InternalUserHandler;
 import company.vk.edu.distrib.compute.robert.urlshortener.api.v0.LinksForwardHandler;
@@ -23,6 +24,7 @@ import company.vk.edu.distrib.compute.robert.urlshortener.validation.implementat
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.jspecify.annotations.Nullable;
 
 public class RobertUrlShortenerService implements UrlShortenerService {
     private static final Logger log = LoggerFactory.getLogger(RobertUrlShortenerService.class);
@@ -33,6 +35,8 @@ public class RobertUrlShortenerService implements UrlShortenerService {
     private final ReentrantLock lock = new ReentrantLock();
 
     private Dao<String> linksDao;
+    private @Nullable String bootstrapServers;
+    private @Nullable RobertModerationClient moderationClient;
     private ServiceState state = ServiceState.NEW;
 
     public RobertUrlShortenerService(int initPort) throws IOException {
@@ -54,11 +58,19 @@ public class RobertUrlShortenerService implements UrlShortenerService {
 
     private void initContexts() {
         httpServer.createContext(ForwardHandler.PATH, new ForwardHandler(linksDao));
-        httpServer.createContext(LinksHandler.PATH, new AuthHandler(new LinksHandler(linksDao, port), usersDao));
+        RobertModerationClient client = moderationClient;
+        LinksHandler linksHandler = client == null
+            ? new LinksHandler(linksDao, port)
+            : new LinksHandler(
+                linksDao,
+                port,
+                client::sendCreated
+            );
+        httpServer.createContext(LinksHandler.PATH, new AuthHandler(linksHandler, usersDao));
         httpServer.createContext(StatusHandler.PATH, new StatusHandler());
         httpServer.createContext(InternalUserHandler.PATH, new InternalUserHandler(usersDao));
         httpServer.createContext(
-            LinksForwardHandler.PATH, 
+            LinksForwardHandler.PATH,
             new AuthHandler(
                 new LinksForwardHandler(linksDao),
                 usersDao
@@ -80,6 +92,19 @@ public class RobertUrlShortenerService implements UrlShortenerService {
     }
 
     @Override
+    public void setKafkaBootstrapServers(String inputBootstrapServers) {
+        lock.lock();
+        try {
+            if (state != ServiceState.NEW) {
+                throw new IllegalStateException();
+            }
+            bootstrapServers = Objects.requireNonNull(inputBootstrapServers);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
     public void start() {
         lock.lock();
         try {
@@ -87,9 +112,21 @@ public class RobertUrlShortenerService implements UrlShortenerService {
                 throw new IllegalStateException();
             }
 
+            String servers = bootstrapServers;
+            if (servers != null) {
+                moderationClient = new RobertModerationClient(
+                    servers,
+                    linksDao,
+                    port
+                );
+            }
             state = ServiceState.STARTED;
             initContexts();
             try {
+                RobertModerationClient client = moderationClient;
+                if (client != null) {
+                    client.start();
+                }
                 httpServer.bind(
                     new InetSocketAddress(
                         InetAddress.getLoopbackAddress(),
@@ -101,6 +138,7 @@ public class RobertUrlShortenerService implements UrlShortenerService {
                 log.atInfo().log("Service started on {}", httpServer.getAddress());
             } catch (IOException e) {
                 state = ServiceState.STOPPED;
+                stopModeration();
                 throw new UncheckedIOException(e);
             }
         } finally {
@@ -117,11 +155,19 @@ public class RobertUrlShortenerService implements UrlShortenerService {
             }
 
             httpServer.stop(1);
+            stopModeration();
             state = ServiceState.STOPPED;
             closeDaos();
             log.atInfo().log("Service stopped");
         } finally {
             lock.unlock();
+        }
+    }
+
+    private void stopModeration() {
+        RobertModerationClient client = moderationClient;
+        if (client != null) {
+            client.stop();
         }
     }
 
