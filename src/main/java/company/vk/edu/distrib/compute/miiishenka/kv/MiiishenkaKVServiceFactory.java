@@ -4,8 +4,10 @@ import java.io.IOException;
 
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.kv.KVServiceTest;
+import company.vk.edu.distrib.compute.kv.ReplicatedKVServiceTest;
 
 @KVServiceTest
+@ReplicatedKVServiceTest
 public class MiiishenkaKVServiceFactory extends AbstractHttpServiceFactory<MiiishenkaKVService> {
     @Override
     protected MiiishenkaKVService doCreate(int port) throws IOException {

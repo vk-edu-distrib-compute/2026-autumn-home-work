@@ -4,9 +4,10 @@ import java.io.IOException;
 import java.util.function.BooleanSupplier;
 
 import com.sun.net.httpserver.HttpExchange;
+import company.vk.edu.distrib.compute.miiishenka.http.BaseController;
 import company.vk.edu.distrib.compute.miiishenka.http.exception.HttpStatusException;
 
-public class StatusController extends BaseKVController {
+public class StatusController extends BaseController {
     private final BooleanSupplier isReady;
 
     public StatusController(BooleanSupplier isReady) {

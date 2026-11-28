@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.miiishenka.kv;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
+import java.net.http.HttpClient;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -12,8 +13,8 @@ import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.kv.KVService;
 import company.vk.edu.distrib.compute.miiishenka.dao.PersistentDao;
+import company.vk.edu.distrib.compute.miiishenka.http.BaseController;
 import company.vk.edu.distrib.compute.miiishenka.http.ControllerHttpHandler;
-import company.vk.edu.distrib.compute.miiishenka.kv.controller.BaseKVController;
 import company.vk.edu.distrib.compute.miiishenka.kv.controller.EntityController;
 import company.vk.edu.distrib.compute.miiishenka.kv.controller.StatusController;
 
@@ -22,6 +23,7 @@ public class MiiishenkaKVService implements KVService {
     private final HttpServer server;
     private final Dao<byte[]> entityDao;
     private final ExecutorService executor;
+    private final HttpClient remoteClient;
     private final AtomicBoolean ready = new AtomicBoolean();
 
     public MiiishenkaKVService(int port) throws IOException {
@@ -41,9 +43,10 @@ public class MiiishenkaKVService implements KVService {
         }
 
         entityDao = PersistentDao.byteArrayDao("/tmp/miiishenka-entities-" + port);
-        List<BaseKVController> controllers = List.of(
+        remoteClient = HttpClient.newHttpClient();
+        List<BaseController> controllers = List.of(
             new StatusController(ready::get),
-            new EntityController(entityDao)
+            new EntityController(entityDao, port, remoteClient)
         );
         controllers.forEach(
                 controller -> server.createContext(controller.getPath(), new ControllerHttpHandler(controller))
@@ -59,14 +62,10 @@ public class MiiishenkaKVService implements KVService {
     @Override
     public void stop() {
         ready.set(false);
-        try (entityDao) {
+        try (entityDao; remoteClient; executor) {
             server.stop(1);
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to persist DAO data", e);
-        } finally {
-            if (executor != null) {
-                executor.shutdown();
-            }
         }
     }
 }

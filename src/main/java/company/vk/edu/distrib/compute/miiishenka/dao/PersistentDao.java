@@ -1,10 +1,10 @@
 package company.vk.edu.distrib.compute.miiishenka.dao;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Base64;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -16,9 +16,14 @@ import java.util.function.Function;
 import company.vk.edu.distrib.compute.Dao;
 
 public class PersistentDao<T> implements Dao<T> {
-    private final String fileName;
-    private final Map<String, T> storage;
+    private static final byte UPSERT = 1;
+    private static final byte DELETE = 2;
+    private static final String EMPTY_VALUE = "";
+
     private final Function<T, String> serialize;
+    private final Function<String, T> deserialize;
+    private final RandomAccessFile journal;
+    private final Map<String, T> storage = new ConcurrentHashMap<>();
     private final Lock persistenceLock = new ReentrantLock();
 
     public PersistentDao(
@@ -26,17 +31,18 @@ public class PersistentDao<T> implements Dao<T> {
             Function<T, String> serialize,
             Function<String, T> deserialize
     ) throws IOException {
-        this.fileName = fileName;
         this.serialize = serialize;
-        this.storage = new ConcurrentHashMap<>();
-        try (RandomAccessFile file = new RandomAccessFile(fileName, "rw")) {
-            if (file.length() == 0) {
-                return;
+        this.deserialize = deserialize;
+        journal = new RandomAccessFile(fileName, "rw");
+        try {
+            replayJournal();
+        } catch (IOException | RuntimeException e) {
+            try {
+                journal.close();
+            } catch (IOException closeException) {
+                e.addSuppressed(closeException);
             }
-            int size = file.readInt();
-            for (int i = 0; i < size; i++) {
-                storage.put(file.readUTF(), deserialize.apply(file.readUTF()));
-            }
+            throw e;
         }
     }
 
@@ -67,10 +73,12 @@ public class PersistentDao<T> implements Dao<T> {
 
     @Override
     public void upsert(String key, T value) throws IllegalArgumentException, IOException {
+        String serializedValue = serialize.apply(value);
+        byte[] record = encodeRecord(UPSERT, key, serializedValue);
         persistenceLock.lock();
         try {
+            append(record);
             storage.put(key, value);
-            persist();
         } finally {
             persistenceLock.unlock();
         }
@@ -78,10 +86,11 @@ public class PersistentDao<T> implements Dao<T> {
 
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
+        byte[] record = encodeRecord(DELETE, key, EMPTY_VALUE);
         persistenceLock.lock();
         try {
+            append(record);
             storage.remove(key);
-            persist();
         } finally {
             persistenceLock.unlock();
         }
@@ -91,37 +100,56 @@ public class PersistentDao<T> implements Dao<T> {
     public void close() throws IOException {
         persistenceLock.lock();
         try {
-            persist();
+            journal.close();
         } finally {
             persistenceLock.unlock();
         }
     }
 
-    private void persist() throws IOException {
-        Path target = Path.of(fileName).toAbsolutePath();
-        Path temporary = Files.createTempFile(
-                target.getParent(),
-                target.getFileName().toString(),
-                ".tmp"
-        );
-
+    private void append(byte[] record) throws IOException {
+        long recordStart = journal.getFilePointer();
         try {
-            try (RandomAccessFile file = new RandomAccessFile(temporary.toFile(), "rw")) {
-                file.writeInt(storage.size());
-                for (var entry : storage.entrySet()) {
-                    file.writeUTF(entry.getKey());
-                    file.writeUTF(serialize.apply(entry.getValue()));
-                }
-                file.getFD().sync();
+            journal.write(record);
+        } catch (IOException e) {
+            try {
+                journal.setLength(recordStart);
+            } catch (IOException rollbackException) {
+                e.addSuppressed(rollbackException);
             }
-            Files.move(
-                    temporary,
-                    target,
-                    StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING
-            );
-        } finally {
-            Files.deleteIfExists(temporary);
+            throw e;
+        }
+    }
+
+    private byte[] encodeRecord(byte operation, String key, String value) throws IOException {
+        try (ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                DataOutputStream output = new DataOutputStream(buffer)) {
+            output.writeByte(operation);
+            output.writeUTF(key);
+            output.writeUTF(value);
+            return buffer.toByteArray();
+        }
+    }
+
+    private void replayJournal() throws IOException {
+        journal.seek(0);
+
+        while (journal.getFilePointer() < journal.length()) {
+            long recordStart = journal.getFilePointer();
+
+            try {
+                byte operation = journal.readByte();
+                String key = journal.readUTF();
+                String value = journal.readUTF();
+
+                switch (operation) {
+                    case UPSERT -> storage.put(key, deserialize.apply(value));
+                    case DELETE -> storage.remove(key);
+                    default -> throw new IOException("Unknown journal operation: " + operation);
+                }
+            } catch (EOFException e) {
+                journal.setLength(recordStart);
+                break;
+            }
         }
     }
 }
